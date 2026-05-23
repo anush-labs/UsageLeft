@@ -76,20 +76,12 @@ function buildAgentStatus(args: {
   state: PluginState | undefined
   displayMode: DisplayMode
   nowMs: number
-}): TrayStatusMenuAgent {
+}): TrayStatusMenuAgent | null {
   const { meta, state, displayMode, nowMs } = args
-  if (state?.loading) {
-    return { id: meta.id, name: meta.name, summary: "Updating..." }
-  }
-
-  if (state?.error) {
-    return { id: meta.id, name: meta.name, summary: state.error, status: "Error" }
-  }
+  if (!state || state.error) return null
 
   const data = state?.data ?? null
-  if (!data) {
-    return { id: meta.id, name: meta.name, summary: "No data yet" }
-  }
+  if (!data) return null
 
   const progress = findPrimaryProgressLine(meta, data)
   if (progress) {
@@ -103,7 +95,27 @@ function buildAgentStatus(args: {
   const statusText = findStatusText(data)
   if (statusText) return { id: meta.id, name: meta.name, summary: statusText }
 
-  return { id: meta.id, name: meta.name, summary: "No session data" }
+  return null
+}
+
+function compactAgentName(name: string): string {
+  const trimmed = name.trim()
+  if (!trimmed) return "Agent"
+  if (trimmed.length <= 12) return trimmed
+  const words = trimmed.split(/\s+/).filter(Boolean)
+  if (words.length > 1) {
+    const initials = words.map((word) => word[0]?.toUpperCase()).join("")
+    if (initials.length >= 2 && initials.length <= 5) return initials
+  }
+  return `${trimmed.slice(0, 11)}...`
+}
+
+function compactSummary(summary: string): string {
+  return summary
+    .replace(/\brequests\b/g, "req")
+    .replace(/\btokens\b/g, "tok")
+    .replace(/\bleft\b/g, "left")
+    .replace(/\bused\b/g, "used")
 }
 
 export function buildTrayStatusMenuPayload(args: {
@@ -126,8 +138,18 @@ export function buildTrayStatusMenuPayload(args: {
       displayMode,
       nowMs,
     }))
+    .filter((agent): agent is TrayStatusMenuAgent => Boolean(agent))
 
   return { agents }
+}
+
+export function buildTrayIndicatorTitle(payload: TrayStatusMenuPayload): string {
+  const parts = payload.agents.map((agent) => (
+    `${compactAgentName(agent.name)} ${compactSummary(agent.summary)}`
+  ))
+  const title = parts.join(" | ")
+  if (title.length <= 120) return title
+  return `${title.slice(0, 117)}...`
 }
 
 export async function updateTrayStatusMenu(payload: TrayStatusMenuPayload): Promise<void> {

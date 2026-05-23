@@ -113,7 +113,7 @@ fn populate_status_menu(
         let empty = MenuItem::with_id(
             app_handle,
             "no_enabled_agents",
-            "No enabled agents",
+            "No signed-in agents",
             false,
             None::<&str>,
         )?;
