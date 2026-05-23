@@ -11,6 +11,7 @@ type PluginState = {
 
 export type TrayPrimaryBar = {
   id: string
+  label?: string
   fraction?: number
 }
 
@@ -30,6 +31,7 @@ export function getTrayPrimaryBars(args: {
   maxBars?: number
   displayMode?: DisplayMode
   pluginId?: string
+  activeOnly?: boolean
 }): TrayPrimaryBar[] {
   const {
     pluginsMeta,
@@ -38,6 +40,7 @@ export function getTrayPrimaryBars(args: {
     maxBars = 4,
     displayMode = DEFAULT_DISPLAY_MODE,
     pluginId,
+    activeOnly = false,
   } = args
   if (!pluginSettings) return []
 
@@ -57,6 +60,8 @@ export function getTrayPrimaryBars(args: {
     if (!meta.primaryCandidates || meta.primaryCandidates.length === 0) continue
 
     const state = pluginStates[id]
+    if (activeOnly && (!state || state.error || !state.data)) continue
+
     const data = state?.data ?? null
 
     let fraction: number | undefined
@@ -80,10 +85,11 @@ export function getTrayPrimaryBars(args: {
       }
     }
 
-    out.push({ id, fraction })
+    if (activeOnly && typeof fraction !== "number") continue
+
+    out.push({ id, label: meta.name, fraction })
     if (out.length >= maxBars) break
   }
 
   return out
 }
-
