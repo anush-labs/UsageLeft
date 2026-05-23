@@ -101,10 +101,41 @@ function estimateTextWidthPx(text: string, fontSize: number): number {
   return Math.ceil(text.length * fontSize * 0.62 + fontSize * 0.2)
 }
 
+function shortAgentLabel(bar: TrayPrimaryBar | undefined): string {
+  const label = (bar?.label ?? bar?.id ?? "").trim()
+  if (!label) return "O"
+  const words = label.split(/\s+/).filter(Boolean)
+  if (words.length > 1) {
+    return words
+      .map((word) => word[0]?.toUpperCase())
+      .join("")
+      .slice(0, 2)
+  }
+  return label.slice(0, 2).toUpperCase()
+}
+
+function renderMaskedIcon(args: {
+  id: string
+  href: string
+  x: number
+  y: number
+  size: number
+  fill: string
+}): string {
+  const { id, href, x, y, size, fill } = args
+  return [
+    `<mask id="${id}" maskUnits="userSpaceOnUse" x="${x}" y="${y}" width="${size}" height="${size}">`,
+    `<image x="${x}" y="${y}" width="${size}" height="${size}" href="${escapeXmlText(href)}" preserveAspectRatio="xMidYMid meet" />`,
+    "</mask>",
+    `<rect x="${x}" y="${y}" width="${size}" height="${size}" fill="${fill}" mask="url(#${id})" />`,
+  ].join("")
+}
+
 function getSvgLayout(args: {
   sizePx: number
   style: MenubarIconStyle
   percentText?: string
+  barCount?: number
 }): {
   width: number
   height: number
@@ -116,7 +147,7 @@ function getSvgLayout(args: {
   textY: number
   fontSize: number
 } {
-  const { sizePx, style, percentText } = args
+  const { sizePx, style, percentText, barCount = 1 } = args
   const hasPercentText = typeof percentText === "string" && percentText.length > 0
   const verticalNudgePx = 1
   const pad = Math.max(1, Math.round(sizePx * 0.08)) // ~2px at 24–36px
@@ -129,6 +160,22 @@ function getSvgLayout(args: {
   const textWidth = hasPercentText ? estimateTextWidthPx(percentText, fontSize) : 0
   // Optical correction + global nudge down to align with the tray slot center.
   const textY = Math.round(sizePx / 2) + 1 + verticalNudgePx
+
+  if (style === "agents") {
+    const n = Math.max(1, Math.min(6, barCount))
+    const segmentW = Math.max(20, Math.round(sizePx * 1.28))
+    return {
+      width: n * segmentW + (n - 1) * gap + pad * 2,
+      height,
+      pad,
+      gap,
+      barsX: pad,
+      barsWidth: segmentW,
+      textX: 0,
+      textY,
+      fontSize: Math.max(8, Math.round(sizePx * 0.42)),
+    }
+  }
 
   if (style === "donut") {
     const donutGap = Math.max(1, Math.round(sizePx * 0.06))
@@ -182,17 +229,20 @@ export function makeTrayBarsSvg(args: {
   style?: MenubarIconStyle
   percentText?: string
   providerIconUrl?: string
+  foregroundColor?: string
 }): string {
-  const { bars, sizePx, style = "provider", percentText, providerIconUrl } = args
-  const barsForStyle = style === "bars" ? bars : bars.slice(0, 1)
+  const { bars, sizePx, style = "provider", percentText, providerIconUrl, foregroundColor = "black" } = args
+  const barsForStyle = style === "bars" || style === "agents" ? bars : bars.slice(0, 1)
   // Intentionally render a single empty track when bars mode has no data yet
   // so the tray icon keeps a stable shape during loading/initialization.
-  const n = Math.max(1, Math.min(4, barsForStyle.length || 1))
+  const maxBars = style === "agents" ? 6 : 4
+  const n = Math.max(1, Math.min(maxBars, barsForStyle.length || 1))
   const text = normalizePercentText(percentText)
   const layout = getSvgLayout({
     sizePx,
     style,
     percentText: text,
+    barCount: n,
   })
 
   const width = layout.width
@@ -213,7 +263,7 @@ export function makeTrayBarsSvg(args: {
 
     if (href.length > 0) {
       parts.push(
-        `<image x="${x}" y="${y}" width="${iconSize}" height="${iconSize}" href="${escapeXmlText(href)}" preserveAspectRatio="xMidYMid meet" />`
+        renderMaskedIcon({ id: "provider-mask", href, x, y, size: iconSize, fill: foregroundColor })
       )
     } else {
       const cx = x + iconSize / 2
@@ -221,7 +271,7 @@ export function makeTrayBarsSvg(args: {
       const radius = Math.max(2, iconSize / 2 - 1.5)
       const strokeW = Math.max(1.5, Math.round(iconSize * 0.14))
       parts.push(
-        `<circle cx="${cx}" cy="${cy}" r="${radius}" fill="none" stroke="black" stroke-width="${strokeW}" opacity="1" shape-rendering="geometricPrecision" />`
+        `<circle cx="${cx}" cy="${cy}" r="${radius}" fill="none" stroke="${foregroundColor}" stroke-width="${strokeW}" opacity="1" shape-rendering="geometricPrecision" />`
       )
     }
   } else if (style === "donut") {
@@ -232,7 +282,7 @@ export function makeTrayBarsSvg(args: {
 
     if (href.length > 0) {
       parts.push(
-        `<image x="${iconX}" y="${iconY}" width="${iconSize}" height="${iconSize}" href="${escapeXmlText(href)}" preserveAspectRatio="xMidYMid meet" />`
+        renderMaskedIcon({ id: "donut-provider-mask", href, x: iconX, y: iconY, size: iconSize, fill: foregroundColor })
       )
     } else {
       const fcx = iconX + iconSize / 2
@@ -240,7 +290,7 @@ export function makeTrayBarsSvg(args: {
       const fallbackR = Math.max(2, iconSize / 2 - 1.5)
       const fallbackSW = Math.max(1.5, Math.round(iconSize * 0.14))
       parts.push(
-        `<circle cx="${fcx}" cy="${fcy}" r="${fallbackR}" fill="none" stroke="black" stroke-width="${fallbackSW}" opacity="1" shape-rendering="geometricPrecision" />`
+        `<circle cx="${fcx}" cy="${fcy}" r="${fallbackR}" fill="none" stroke="${foregroundColor}" stroke-width="${fallbackSW}" opacity="1" shape-rendering="geometricPrecision" />`
       )
     }
 
@@ -253,7 +303,7 @@ export function makeTrayBarsSvg(args: {
     const radius = Math.max(1, Math.floor(chartSize / 2 - strokeW / 2) + 0.5)
 
     parts.push(
-      `<circle cx="${cx}" cy="${cy}" r="${radius}" fill="none" stroke="black" stroke-width="${strokeW}" opacity="${BARS_TRACK_OPACITY}" shape-rendering="geometricPrecision" />`
+      `<circle cx="${cx}" cy="${cy}" r="${radius}" fill="none" stroke="${foregroundColor}" stroke-width="${strokeW}" opacity="${BARS_TRACK_OPACITY}" shape-rendering="geometricPrecision" />`
     )
 
     const fraction = barsForStyle[0]?.fraction
@@ -263,8 +313,41 @@ export function makeTrayBarsSvg(args: {
         const circumference = 2 * Math.PI * radius
         const dash = circumference * clamped
         parts.push(
-          `<circle cx="${cx}" cy="${cy}" r="${radius}" fill="none" stroke="black" stroke-width="${strokeW}" stroke-linecap="butt" stroke-dasharray="${dash} ${circumference}" transform="rotate(-90 ${cx} ${cy})" opacity="${BARS_FILL_OPACITY}" shape-rendering="geometricPrecision" />`
+          `<circle cx="${cx}" cy="${cy}" r="${radius}" fill="none" stroke="${foregroundColor}" stroke-width="${strokeW}" stroke-linecap="butt" stroke-dasharray="${dash} ${circumference}" transform="rotate(-90 ${cx} ${cy})" opacity="${BARS_FILL_OPACITY}" shape-rendering="geometricPrecision" />`
         )
+      }
+    }
+  } else if (style === "agents") {
+    const segmentW = layout.barsWidth
+    const labelY = Math.max(7, Math.round(height * 0.4))
+    const trackH = Math.max(2, Math.round(height * 0.16))
+    const trackY = Math.round(height * 0.68)
+    const rx = Math.max(1, Math.floor(trackH / 2))
+
+    for (let i = 0; i < n; i += 1) {
+      const bar = barsForStyle[i]
+      const x = layout.pad + i * (segmentW + layout.gap)
+      const label = shortAgentLabel(bar)
+      parts.push(
+        `<text x="${x + segmentW / 2}" y="${labelY}" fill="${foregroundColor}" font-family="Inter,Arial,sans-serif" font-size="${layout.fontSize}" font-weight="800" text-anchor="middle" dominant-baseline="middle">${escapeXmlText(label)}</text>`
+      )
+      parts.push(
+        `<rect x="${x}" y="${trackY}" width="${segmentW}" height="${trackH}" rx="${rx}" fill="${foregroundColor}" opacity="${BARS_TRACK_OPACITY}" />`
+      )
+
+      const fraction = bar?.fraction
+      if (typeof fraction === "number" && Number.isFinite(fraction) && fraction >= 0) {
+        const { fillW, remainderDrawW, dividerX } = getBarFillLayout(segmentW, fraction)
+        if (fillW > 0) {
+          parts.push(
+            `<rect x="${x}" y="${trackY}" width="${fillW}" height="${trackH}" rx="${rx}" fill="${foregroundColor}" opacity="${BARS_FILL_OPACITY}" />`
+          )
+        }
+        if (fillW > 0 && remainderDrawW > 0 && dividerX !== null) {
+          parts.push(
+            `<rect x="${x + dividerX}" y="${trackY}" width="${remainderDrawW}" height="${trackH}" rx="${rx}" fill="${foregroundColor}" opacity="${BARS_REMAINDER_OPACITY}" />`
+          )
+        }
       }
     }
   } else {
@@ -290,7 +373,7 @@ export function makeTrayBarsSvg(args: {
       const x = layout.barsX
 
       parts.push(
-        `<rect x="${x}" y="${y}" width="${trackW}" height="${trackH}" rx="${rx}" fill="black" opacity="${trackOpacity}" />`
+        `<rect x="${x}" y="${y}" width="${trackW}" height="${trackH}" rx="${rx}" fill="${foregroundColor}" opacity="${trackOpacity}" />`
       )
 
       const fraction = bar?.fraction
@@ -300,7 +383,7 @@ export function makeTrayBarsSvg(args: {
           const movingEdgeRadius = Math.max(0, Math.floor(rx * 0.35))
           if (fillW >= trackW) {
             parts.push(
-              `<rect x="${x}" y="${y}" width="${fillW}" height="${trackH}" rx="${rx}" fill="black" opacity="${fillOpacity}" />`
+              `<rect x="${x}" y="${y}" width="${fillW}" height="${trackH}" rx="${rx}" fill="${foregroundColor}" opacity="${fillOpacity}" />`
             )
           } else {
             const fillPath = makeRoundedBarPath({
@@ -311,7 +394,7 @@ export function makeTrayBarsSvg(args: {
               leftRadius: rx,
               rightRadius: movingEdgeRadius,
             })
-            parts.push(`<path d="${fillPath}" fill="black" opacity="${fillOpacity}" />`)
+            parts.push(`<path d="${fillPath}" fill="${foregroundColor}" opacity="${fillOpacity}" />`)
           }
         }
 
@@ -325,7 +408,7 @@ export function makeTrayBarsSvg(args: {
             leftRadius: Math.max(0, Math.floor(rx * 0.2)),
             rightRadius: rx,
           })
-          parts.push(`<path d="${remainderPath}" fill="black" opacity="${remainderOpacity}" />`)
+          parts.push(`<path d="${remainderPath}" fill="${foregroundColor}" opacity="${remainderOpacity}" />`)
         }
       }
     }
@@ -333,7 +416,7 @@ export function makeTrayBarsSvg(args: {
 
   if (text) {
     parts.push(
-      `<text x="${layout.textX}" y="${layout.textY}" fill="black" font-family="-apple-system,BlinkMacSystemFont,'SF Pro Text',sans-serif" font-size="${layout.fontSize}" font-weight="700" dominant-baseline="middle">${escapeXmlText(text)}</text>`
+      `<text x="${layout.textX}" y="${layout.textY}" fill="${foregroundColor}" font-family="-apple-system,BlinkMacSystemFont,'SF Pro Text',sans-serif" font-size="${layout.fontSize}" font-weight="700" dominant-baseline="middle">${escapeXmlText(text)}</text>`
     )
   }
 
@@ -380,8 +463,9 @@ export async function renderTrayBarsIcon(args: {
   style?: MenubarIconStyle
   percentText?: string
   providerIconUrl?: string
+  foregroundColor?: string
 }): Promise<Image> {
-  const { bars, sizePx, style = "provider", percentText, providerIconUrl } = args
+  const { bars, sizePx, style = "provider", percentText, providerIconUrl, foregroundColor } = args
   const text = normalizePercentText(percentText)
   const svg = makeTrayBarsSvg({
     bars,
@@ -389,11 +473,13 @@ export async function renderTrayBarsIcon(args: {
     style,
     percentText: text,
     providerIconUrl,
+    foregroundColor,
   })
   const layout = getSvgLayout({
     sizePx,
     style,
     percentText: text,
+    barCount: style === "agents" ? Math.max(1, Math.min(6, bars.length || 1)) : undefined,
   })
   const rgba = await rasterizeSvgToRgba(svg, layout.width, layout.height)
   return await Image.new(rgba, layout.width, layout.height)
