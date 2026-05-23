@@ -6,6 +6,7 @@ import type { DisplayMode, MenubarIconStyle, PluginSettings } from "@/lib/settin
 import { getEnabledPluginIds } from "@/lib/settings"
 import { getTrayIconSizePx, renderTrayBarsIcon } from "@/lib/tray-bars-icon"
 import { getTrayPrimaryBars, type TrayPrimaryBar } from "@/lib/tray-primary-progress"
+import { buildTrayStatusMenuPayload, updateTrayStatusMenu } from "@/lib/tray-status-menu"
 import { formatTrayPercentText, formatTrayTooltip } from "@/lib/tray-tooltip"
 import type { PluginState } from "@/hooks/app/types"
 
@@ -170,14 +171,28 @@ export function useTrayIcon({
         }
       }
 
+      const publishStatusMenu = (settings: PluginSettings | null) => {
+        const payload = buildTrayStatusMenuPayload({
+          pluginsMeta: pluginsMetaRef.current,
+          pluginSettings: settings,
+          pluginStates: pluginStatesRef.current,
+          displayMode: displayModeRef.current,
+        })
+        void updateTrayStatusMenu(payload).catch((error) => {
+          console.error("Failed to update tray status menu:", error)
+        })
+      }
+
       const currentSettings = pluginSettingsRef.current
       if (!currentSettings) {
         setTraySettingsPreview(EMPTY_TRAY_SETTINGS_PREVIEW)
+        publishStatusMenu(null)
         restoreGaugeIcon()
         return
       }
 
       const enabledPluginIds = getEnabledPluginIds(currentSettings)
+      publishStatusMenu(currentSettings)
       if (enabledPluginIds.length === 0) {
         setTraySettingsPreview(EMPTY_TRAY_SETTINGS_PREVIEW)
         restoreGaugeIcon()
