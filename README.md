@@ -1,32 +1,86 @@
-# Track all your AI coding subscriptions in one place
+# OpenUsage
 
-See your usage at a glance from your menu bar. No digging through dashboards.
+Track AI coding subscription usage from the Ubuntu status indicator.
+
+OpenUsage is Linux-first. It runs as a desktop app, stays available from Ubuntu Status Menus / AppIndicators, and gives quick access to agent sessions, usage, reset times, refresh actions, settings, and the full dashboard.
 
 ![OpenUsage Screenshot](screenshot.png)
 
-## Download
+## Quick Start
 
-[**Download the latest release**](https://github.com/robinebers/openusage/releases/latest) (macOS, Apple Silicon & Intel)
+Install from a release:
 
-The app auto-updates. Install once and you're set.
+```bash
+sudo apt install -y ./OpenUsage_*_amd64.deb
+```
+
+Build and install from source:
+
+```bash
+make setup
+make package
+sudo apt install -y ./dist/linux/*.deb
+```
+
+Run from source during development:
+
+```bash
+make dev
+```
+
+Need the full build guide? See [docs/linux-build.md](docs/linux-build.md).
 
 ## What It Does
 
-OpenUsage lives in your menu bar and shows you how much of your AI coding subscriptions you've used. Progress bars, badges, and clear labels. No mental math required.
+OpenUsage tracks usage from AI coding tools and shows it in two places:
 
-- **One glance.** All your AI tools, one panel.
-- **Always up-to-date.** Refreshes automatically on a schedule you pick.
-- **Global shortcut.** Toggle the panel from anywhere with a customizable keyboard shortcut.
-- **Lightweight.** Opens instantly, stays out of your way.
-- **Plugin-based.** New providers get added without updating the whole app.
-- **[Local HTTP API](docs/local-http-api.md).** Other apps can read your usage data from `127.0.0.1:6736`.
-- **[Proxy support](docs/proxy.md).** Route provider HTTP requests through a SOCKS5 or HTTP proxy.
+- **Ubuntu status indicator menu.** Quick session tracker with enabled agents, usage left or used, reset timing, refresh all, settings, and quit.
+- **Dashboard window.** Full usage view with provider cards, detail pages, settings, plugin controls, and update settings.
+
+Main features:
+
+- Tracks multiple AI agent sessions in one place.
+- Shows progress, badges, reset timers, and provider-specific usage lines.
+- Refreshes automatically on a configurable interval.
+- Supports manual refresh for all enabled providers.
+- Supports a global keyboard shortcut to show or hide the dashboard.
+- Starts on login when enabled in settings.
+- Exposes a local HTTP API on `127.0.0.1:6736`.
+- Supports SOCKS5 and HTTP proxies for provider requests.
+- Builds clean Ubuntu binaries, `.deb` packages, and AppImages.
+
+## Ubuntu Status Indicator
+
+OpenUsage creates an Ubuntu indicator entry. The indicator menu is the fastest way to monitor usage without opening the full dashboard.
+
+The menu includes:
+
+- **Show Dashboard** opens the main window.
+- **Refresh All** refreshes enabled providers.
+- **Agent rows** show the current state for each enabled provider.
+- **Settings** opens app configuration.
+- **About OpenUsage** opens app information.
+- **Quit** exits the app.
+
+Agent rows show the most useful short status available:
+
+- Percent, request count, token count, or dollar amount left.
+- Reset timing when a provider exposes it.
+- Loading state while a provider refreshes.
+- Error text when a provider check fails.
+- `No data yet` before the first refresh.
+
+GNOME may need AppIndicator support enabled depending on the Ubuntu image. Install the Ayatana AppIndicator package:
+
+```bash
+sudo apt install -y libayatana-appindicator3-dev
+```
 
 ## Supported Providers
 
 - [**Amp**](docs/providers/amp.md) / free tier, bonus, credits
 - [**Antigravity**](docs/providers/antigravity.md) / all models
-- [**Claude**](docs/providers/claude.md) / session, weekly, extra usage, local token usage (ccusage)
+- [**Claude**](docs/providers/claude.md) / session, weekly, extra usage, local token usage through ccusage
 - [**Codex**](docs/providers/codex.md) / session, weekly, reviews, credits
 - [**Copilot**](docs/providers/copilot.md) / premium, chat, completions
 - [**Cursor**](docs/providers/cursor.md) / credits, total usage, auto usage, API usage, on-demand, CLI auth
@@ -38,20 +92,221 @@ OpenUsage lives in your menu bar and shows you how much of your AI coding subscr
 - [**Kimi Code**](docs/providers/kimi.md) / session, weekly
 - [**MiniMax**](docs/providers/minimax.md) / coding plan session
 - [**OpenCode Go**](docs/providers/opencode-go.md) / 5h, weekly, monthly spend limits
+- [**Perplexity**](docs/providers/perplexity.md) / usage and subscription state
 - [**Windsurf**](docs/providers/windsurf.md) / prompt credits, flex credits
 - [**Z.ai**](docs/providers/zai.md) / session, weekly, web searches
 
-Community contributions welcome.
+Want another provider? Open an issue or add a plugin. See [Plugin API](docs/plugins/api.md).
 
-Want a provider that's not listed? [Open an issue.](https://github.com/robinebers/openusage/issues/new)
+## Install From Release
 
-## Open Source, Community Driven
+Download the latest Ubuntu `.deb` or AppImage from:
 
-OpenUsage is built by its users. Hundreds of people use it daily, and the project grows through community contributions: new providers, bug fixes, and ideas.
+<https://github.com/robinebers/openusage/releases/latest>
 
-I maintain the project as a guide and quality gatekeeper, but this is your app as much as mine. If something is missing or broken, the best way to get it fixed is to contribute by opening an issue, or submitting a PR.
+Install the `.deb`:
 
-Plugins are currently bundled as we build our the API, but soon will be made flexible so you can build and load their own.
+```bash
+sudo apt install -y ./OpenUsage_*_amd64.deb
+```
+
+Run the AppImage:
+
+```bash
+chmod +x ./OpenUsage_*_amd64.AppImage
+./OpenUsage_*_amd64.AppImage
+```
+
+Official release builds support app updates.
+
+## Build From Source
+
+OpenUsage uses:
+
+- Ubuntu / Linux desktop
+- Tauri v2
+- Rust stable
+- Node.js + npm
+- React + Vite
+
+Install everything needed for Ubuntu builds:
+
+```bash
+make setup
+```
+
+If Rust was just installed and `cargo` is not found:
+
+```bash
+source "$HOME/.cargo/env"
+```
+
+Run checks:
+
+```bash
+make check
+make cargo-check
+```
+
+Build a raw Ubuntu binary:
+
+```bash
+make binary
+```
+
+Output:
+
+```text
+dist/linux/openusage
+```
+
+Build local Ubuntu packages:
+
+```bash
+make package
+```
+
+Output:
+
+```text
+dist/linux/openusage
+dist/linux/OpenUsage_<version>_amd64.deb
+dist/linux/OpenUsage_<version>_amd64.AppImage
+```
+
+Install the local `.deb`:
+
+```bash
+sudo apt install -y ./dist/linux/*.deb
+```
+
+## Make Targets
+
+```bash
+make help          # list targets
+make setup         # install Ubuntu deps, Rust, and npm deps
+make ubuntu-deps   # install Ubuntu system packages only
+make rust          # install Rust if cargo is missing
+make deps          # install npm packages
+make doctor        # print Tauri environment info
+make check         # TypeScript check + Vitest
+make cargo-check   # Rust compile check
+make dev           # run Tauri dev app
+make web           # build frontend only
+make binary        # build raw Ubuntu binary
+make package       # build local .deb + AppImage
+make install-deb   # build and install local .deb
+make release       # signed release build with updater artifacts
+make clean-bundles # trash package output
+make clean-all     # trash dist and Rust target output
+```
+
+## Release Builds
+
+Use `make package` for local testing. It disables updater artifact signing so normal local builds do not need a private key.
+
+Use `make release` only for release publishing:
+
+```bash
+export TAURI_SIGNING_PRIVATE_KEY=/path/to/private.key
+make release
+```
+
+If the private key is stored directly in an environment variable instead of a file path, export the key contents as `TAURI_SIGNING_PRIVATE_KEY`.
+
+## Troubleshooting
+
+### `rquickjs-sys` fails with `stdbool.h` not found
+
+Install the Ubuntu C toolchain and headers:
+
+```bash
+sudo apt update
+sudo apt install -y clang libclang-dev libc6-dev build-essential
+cargo clean -p rquickjs-sys
+make package
+```
+
+The app no longer enables the `rquickjs` `bindgen` feature by default. That avoids requiring clang to generate QuickJS bindings during normal builds.
+
+### `cargo` not found
+
+Load Rust into the current shell:
+
+```bash
+source "$HOME/.cargo/env"
+```
+
+Then retry:
+
+```bash
+make cargo-check
+```
+
+### Indicator icon does not appear
+
+Install AppIndicator support:
+
+```bash
+sudo apt install -y libayatana-appindicator3-dev
+```
+
+On GNOME, confirm the AppIndicator extension is enabled for your desktop session.
+
+### `make package` asks for `TAURI_SIGNING_PRIVATE_KEY`
+
+Use the updated Makefile target:
+
+```bash
+make package
+```
+
+Local packages disable updater artifacts. Only `make release` needs signing keys.
+
+### Need logs
+
+Ubuntu log path:
+
+```text
+~/.local/share/com.sunstory.openusage/logs/OpenUsage.log
+```
+
+See [docs/capture-logs.md](docs/capture-logs.md).
+
+### `Could not create GBM EGL display`
+
+This is a WebKitGTK graphics startup issue seen on some Ubuntu/NVIDIA sessions. OpenUsage sets `WEBKIT_DISABLE_DMABUF_RENDERER=1` on Linux before WebKit starts.
+
+To test the workaround manually:
+
+```bash
+WEBKIT_DISABLE_DMABUF_RENDERER=1 openusage
+```
+
+## Useful Docs
+
+- [Linux Build Guide](docs/linux-build.md)
+- [Local HTTP API](docs/local-http-api.md)
+- [Proxy Support](docs/proxy.md)
+- [Plugin API](docs/plugins/api.md)
+- [Plugin Schema](docs/plugins/schema.md)
+- [App State Architecture](docs/app-state-architecture.md)
+
+## Contributing
+
+Keep changes small and practical.
+
+- Add providers as plugins.
+- Add tests for plugin parsing and regressions.
+- Update provider docs when behavior changes.
+- Provide before/after screenshots for visual changes.
+- Keep bundled plugin request/response fields aligned with host API redaction rules.
+
+Plugins are currently bundled while the plugin API matures. The goal is to make external plugin loading flexible without making the app complicated.
+
+## Community
+
+OpenUsage grows through provider contributions, bug fixes, and practical improvements.
 
 <a href="https://www.star-history.com/?repos=robinebers%2Fopenusage&type=date&legend=top-left">
  <picture>
@@ -61,43 +316,10 @@ Plugins are currently bundled as we build our the API, but soon will be made fle
  </picture>
 </a>
 
-### How to Contribute
-
-- **Add a provider.** Each one is just a plugin. See the [Plugin API](docs/plugins/api.md).
-- **Fix a bug.** PRs welcome. Provide before/after screenshots.
-- **Request a feature.** [Open an issue](https://github.com/robinebers/openusage/issues/new) and make your case.
-
-Keep it simple. No feature creep, no AI-generated commit messages, test your changes.
-
-## Built Entirely with AI
-
-Not a single line of code in this project was read or written by hand. 100% AI-generated, AI-reviewed, AI-shipped — using [Cursor](https://cursor.com), [Claude Code](https://docs.anthropic.com/en/docs/claude-code), and [Codex CLI](https://github.com/openai/codex).
-
-OpenUsage is a real-world example of what I teach in the [AI Builder's Blueprint](https://itsbyrob.in/EBDqgJ6) — a proven process for building and shipping software with AI, no coding background required.
-
-## Sponsors
-
-OpenUsage is supported by our sponsors. Become a sponsor to get your logo here and on [openusage.ai](https://openusage.ai).
-
-[Become a Sponsor](https://github.com/sponsors/robinebers)
-
-<!-- Add sponsor logos here -->
-
 ## Credits
 
-Inspired by [CodexBar](https://github.com/steipete/CodexBar) by [@steipete](https://github.com/steipete). Same idea, very different approach.
+Inspired by [CodexBar](https://github.com/steipete/CodexBar) by [@steipete](https://github.com/steipete).
 
 ## License
 
 [MIT](LICENSE)
-
----
-
-<details>
-<summary><strong>Build from source</strong></summary>
-
-> **Warning**: The `main` branch may not be stable. It is merged directly without staging, so users are advised to use tagged versions for stable builds. Tagged versions are fully tested while `main` may contain unreleased features.
-
-### Stack
-
-...
