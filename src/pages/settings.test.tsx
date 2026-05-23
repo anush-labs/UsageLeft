@@ -223,10 +223,10 @@ describe("SettingsPage", () => {
     expect(onTimeFormatModeChange).toHaveBeenCalledWith("24h")
   })
 
-  it("renders menubar icon section", () => {
+  it("renders status indicator icon section", () => {
     render(<SettingsPage {...defaultProps} />)
-    expect(screen.getByText("Menubar Icon")).toBeInTheDocument()
-    expect(screen.getByText("What shows in the menu bar")).toBeInTheDocument()
+    expect(screen.getByText("Status Indicator Icon")).toBeInTheDocument()
+    expect(screen.getByText("What shows in Ubuntu status menus")).toBeInTheDocument()
   })
 
   it("clicking Bars triggers onMenubarIconStyleChange(\"bars\")", async () => {

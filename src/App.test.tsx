@@ -19,6 +19,8 @@ const state = vi.hoisted(() => ({
   saveDisplayModeMock: vi.fn(),
   loadResetTimerDisplayModeMock: vi.fn(),
   saveResetTimerDisplayModeMock: vi.fn(),
+  loadTimeFormatModeMock: vi.fn(),
+  saveTimeFormatModeMock: vi.fn(),
   loadMenubarIconStyleMock: vi.fn(),
   saveMenubarIconStyleMock: vi.fn(),
   migrateLegacyTraySettingsMock: vi.fn(),
@@ -227,6 +229,8 @@ vi.mock("@/lib/settings", async () => {
     saveDisplayMode: state.saveDisplayModeMock,
     loadResetTimerDisplayMode: state.loadResetTimerDisplayModeMock,
     saveResetTimerDisplayMode: state.saveResetTimerDisplayModeMock,
+    loadTimeFormatMode: state.loadTimeFormatModeMock,
+    saveTimeFormatMode: state.saveTimeFormatModeMock,
     loadMenubarIconStyle: state.loadMenubarIconStyleMock,
     saveMenubarIconStyle: state.saveMenubarIconStyleMock,
     migrateLegacyTraySettings: state.migrateLegacyTraySettingsMock,
@@ -265,6 +269,8 @@ describe("App", () => {
     state.saveDisplayModeMock.mockReset()
     state.loadResetTimerDisplayModeMock.mockReset()
     state.saveResetTimerDisplayModeMock.mockReset()
+    state.loadTimeFormatModeMock.mockReset()
+    state.saveTimeFormatModeMock.mockReset()
     state.loadMenubarIconStyleMock.mockReset()
     state.saveMenubarIconStyleMock.mockReset()
     state.migrateLegacyTraySettingsMock.mockReset()
@@ -303,6 +309,8 @@ describe("App", () => {
     state.saveDisplayModeMock.mockResolvedValue(undefined)
     state.loadResetTimerDisplayModeMock.mockResolvedValue("relative")
     state.saveResetTimerDisplayModeMock.mockResolvedValue(undefined)
+    state.loadTimeFormatModeMock.mockResolvedValue("auto")
+    state.saveTimeFormatModeMock.mockResolvedValue(undefined)
     state.loadMenubarIconStyleMock.mockResolvedValue("provider")
     state.saveMenubarIconStyleMock.mockResolvedValue(undefined)
     state.migrateLegacyTraySettingsMock.mockResolvedValue(undefined)
@@ -682,7 +690,7 @@ describe("App", () => {
     const settingsButtons = await screen.findAllByRole("button", { name: "Settings" })
     await userEvent.click(settingsButtons[0])
 
-    expect(screen.getByText("Menubar Icon")).toBeVisible()
+    expect(screen.getByText("Status Indicator Icon")).toBeVisible()
     const barsRadio = await screen.findByRole("radio", { name: "Bars" })
     await userEvent.click(barsRadio)
     expect(state.saveMenubarIconStyleMock).toHaveBeenCalledWith("bars")
@@ -699,7 +707,7 @@ describe("App", () => {
     const settingsButtons = await screen.findAllByRole("button", { name: "Settings" })
     await userEvent.click(settingsButtons[0])
 
-    expect(screen.getByText("Menubar Icon")).toBeVisible()
+    expect(screen.getByText("Status Indicator Icon")).toBeVisible()
     const donutRadio = await screen.findByRole("radio", { name: "Donut" })
     await userEvent.click(donutRadio)
     expect(state.saveMenubarIconStyleMock).toHaveBeenCalledWith("donut")
