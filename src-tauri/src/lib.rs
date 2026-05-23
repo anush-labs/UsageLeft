@@ -1,12 +1,8 @@
-#[cfg(target_os = "macos")]
-mod app_nap;
 mod config;
 mod local_http_api;
 mod panel;
 mod plugin_engine;
 mod tray;
-#[cfg(target_os = "macos")]
-mod webkit_config;
 
 use std::collections::{HashMap, HashSet};
 use std::path::PathBuf;
@@ -14,7 +10,7 @@ use std::sync::atomic::{AtomicUsize, Ordering};
 use std::sync::{Arc, Mutex, OnceLock};
 
 use serde::Serialize;
-use tauri::Emitter;
+use tauri::{Emitter, Manager};
 use tauri_plugin_aptabase::EventTracker;
 use tauri_plugin_log::{Target, TargetKind};
 use uuid::Uuid;
@@ -195,10 +191,7 @@ fn init_panel(app_handle: tauri::AppHandle) {
 
 #[tauri::command]
 fn hide_panel(app_handle: tauri::AppHandle) {
-    use tauri_nspanel::ManagerExt;
-    if let Ok(panel) = app_handle.get_webview_panel("main") {
-        panel.hide();
-    }
+    panel::hide_panel(&app_handle);
 }
 
 #[tauri::command]
@@ -346,12 +339,20 @@ async fn start_probe_batch(
 
 #[tauri::command]
 fn get_log_path(app_handle: tauri::AppHandle) -> Result<String, String> {
-    // macOS log directory: ~/Library/Logs/{bundleIdentifier}
-    let home = dirs::home_dir().ok_or("no home dir")?;
-    let bundle_id = app_handle.config().identifier.clone();
-    let log_dir = home.join("Library").join("Logs").join(&bundle_id);
+    let log_dir = app_handle
+        .path()
+        .app_log_dir()
+        .map_err(|error| error.to_string())?;
     let log_file = log_dir.join(format!("{}.log", app_handle.package_info().name));
     Ok(log_file.to_string_lossy().to_string())
+}
+
+#[tauri::command]
+fn update_tray_status_menu(
+    app_handle: tauri::AppHandle,
+    payload: tray::TrayStatusMenuPayload,
+) -> Result<(), String> {
+    tray::update_status_menu(&app_handle, payload)
 }
 
 /// Update the global shortcut registration.
@@ -474,7 +475,6 @@ pub fn run() {
         .plugin(tauri_plugin_aptabase::Builder::new("A-US-6435241436").build())
         .plugin(tauri_plugin_opener::init())
         .plugin(tauri_plugin_store::Builder::default().build())
-        .plugin(tauri_nspanel::init())
         .plugin(
             tauri_plugin_log::Builder::new()
                 .targets([
@@ -499,20 +499,10 @@ pub fn run() {
             start_probe_batch,
             list_plugins,
             get_log_path,
-            update_global_shortcut
+            update_global_shortcut,
+            update_tray_status_menu
         ])
         .setup(|app| {
-            #[cfg(target_os = "macos")]
-            app.set_activation_policy(tauri::ActivationPolicy::Accessory);
-
-            #[cfg(target_os = "macos")]
-            {
-                app_nap::disable_app_nap();
-                webkit_config::disable_webview_suspension(app.handle());
-            }
-
-            use tauri::Manager;
-
             let version = app.package_info().version.to_string();
             log::info!("OpenUsage v{} starting", version);
 
