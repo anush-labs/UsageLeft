@@ -12,7 +12,7 @@ function fail(message) {
 
 const version = process.argv[2];
 if (!version) {
-  fail("missing version argument. Usage: bun run ccusage:bump -- <x.y.z>");
+  fail("missing version argument. Usage: npm run ccusage:bump -- <x.y.z>");
 }
 if (!VERSION_RE.test(version)) {
   fail(`invalid version "${version}", expected x.y.z`);

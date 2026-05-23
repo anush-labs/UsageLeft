@@ -4,9 +4,9 @@
   "version": "0.6.24",
   "identifier": "com.sunstory.openusage",
   "build": {
-    "beforeDevCommand": "bun run bundle:plugins && bun run dev",
+    "beforeDevCommand": "npm run bundle:plugins && npm run dev",
     "devUrl": "http://localhost:1420",
-    "beforeBuildCommand": "bun run bundle:plugins && bun run build",
+    "beforeBuildCommand": "npm run bundle:plugins && npm run build",
     "frontendDist": "../dist"
   },
   "app": {
@@ -16,42 +16,24 @@
         "title": "OpenUsage",
         "width": 400,
         "height": 500,
-        "resizable": false,
-        "decorations": false,
-        "transparent": true,
+        "resizable": true,
+        "decorations": true,
+        "transparent": false,
         "visible": false
       }
     ],
     "security": {
       "csp": null
-    },
-    "macOSPrivateApi": true
+    }
   },
   "bundle": {
     "active": true,
-    "targets": "all",
-    "macOS": {
-      "dmg": {
-        "appPosition": {
-          "x": 180,
-          "y": 170
-        },
-        "applicationFolderPosition": {
-          "x": 480,
-          "y": 170
-        },
-        "windowSize": {
-          "width": 660,
-          "height": 400
-        }
-      }
-    },
+    "targets": ["deb", "appimage"],
     "icon": [
       "icons/32x32.png",
       "icons/128x128.png",
       "icons/128x128@2x.png",
-      "icons/icon.icns",
-      "icons/icon.ico"
+      "icons/icon.png"
     ],
     "resources": [
       "resources/bundled_plugins/**/*",
