@@ -1,4 +1,6 @@
 import { useCallback, useEffect, useRef } from "react"
+import { isTauri } from "@tauri-apps/api/core"
+import { listen } from "@tauri-apps/api/event"
 import { useShallow } from "zustand/react/shallow"
 import { AppShell } from "@/components/app/app-shell"
 import { useAppPluginViews } from "@/hooks/app/use-app-plugin-views"
@@ -106,6 +108,11 @@ function App() {
   })
 
   useEffect(() => {
+    if (!pluginSettings) return
+    scheduleTrayIconUpdate("probe", 0)
+  }, [pluginSettings, pluginStates, scheduleTrayIconUpdate])
+
+  useEffect(() => {
     scheduleProbeTrayUpdateRef.current = () => {
       scheduleTrayIconUpdate("probe", TRAY_PROBE_DEBOUNCE_MS)
     }
@@ -183,6 +190,29 @@ function App() {
     pluginsMeta,
     pluginStates,
   })
+
+  useEffect(() => {
+    if (!isTauri()) return
+    let cancelled = false
+    let unlisten: (() => void) | null = null
+
+    void listen("tray:refresh-all", () => {
+      handleRefreshAll()
+    }).then((nextUnlisten) => {
+      if (cancelled) {
+        nextUnlisten()
+        return
+      }
+      unlisten = nextUnlisten
+    }).catch((error) => {
+      console.error("Failed to listen for tray refresh:", error)
+    })
+
+    return () => {
+      cancelled = true
+      unlisten?.()
+    }
+  }, [handleRefreshAll])
 
   const pluginSettingsRef = useRef(pluginSettings)
   useEffect(() => {
