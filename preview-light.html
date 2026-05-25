@@ -1,0 +1,101 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <title>Light Mode Preview</title>
+  <link rel="stylesheet" href="http://localhost:5173/src/index.css" />
+  <style>
+    html, body { background: white; margin: 0; padding: 0; }
+    #root { background: white; }
+    .preview-wrap {
+      width: 400px;
+      min-height: 520px;
+      margin: 0 auto;
+      background: white;
+    }
+  </style>
+</head>
+<body>
+  <div id="root">
+    <div class="preview-wrap">
+      <div class="tray-dashboard" style="background: linear-gradient(145deg, #ede0f7 0%, #c8a8e8 45%, #7b3faa 100%); color: #0d0020;">
+        <!-- Header -->
+        <header class="tray-dashboard-header" style="border-bottom-color: rgba(45,0,80,0.2);">
+          <button type="button" class="tray-brand" style="background:transparent; border:0; cursor:pointer; display:flex; align-items:center; gap:9px;">
+            <span class="tray-brand-icon"><svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" fill="none" style="width:15px;height:15px"><circle cx="12" cy="12" r="9" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" stroke-dasharray="47 10" stroke-dashoffset="3"/><circle cx="19.5" cy="15" r="1.4" fill="currentColor"/></svg></span>
+            <span class="tray-brand-name" style="font-size:14px; font-weight:700; color:#0d0020;">UsageLeft</span>
+          </button>
+          <button class="tray-refresh-btn" style="background:rgba(45,0,80,0.08); color:rgba(13,0,32,0.7);">↺</button>
+        </header>
+
+        <!-- Agents -->
+        <main class="tray-agents-section">
+          <div class="tray-section-label" style="color:rgba(13,0,32,0.45);">Active agents</div>
+          <div class="agents-grid">
+
+            <!-- Claude card -->
+            <div class="agent-card" style="--agent-color:#ff7a45; --agent-soft:rgba(255,122,69,0.12); --agent-soft-dark:rgba(255,122,69,0.28); background:rgba(45,0,80,0.06); border-color:rgba(45,0,80,0.18);">
+              <div style="position:absolute;inset:0;background:linear-gradient(135deg,rgba(255,122,69,0.28),transparent 62%);border-radius:13px;"></div>
+              <div style="position:relative;">
+                <div class="agent-logo" style="background:linear-gradient(135deg,#ff7a45,rgba(255,122,69,0.65));">CL</div>
+                <span class="agent-name" style="color:#0d0020;">Claude</span>
+                <span class="agent-metric" style="color:rgba(13,0,32,0.75);">$38.00 used</span>
+                <span class="agent-detail" style="color:rgba(13,0,32,0.5);">Monthly</span>
+                <span class="agent-progress-track" style="background:rgba(45,0,80,0.15);">
+                  <span class="agent-progress-fill" style="width:38%; background:linear-gradient(90deg,#ff7a45,rgba(45,0,80,0.4));"></span>
+                </span>
+              </div>
+            </div>
+
+            <!-- Gemini card -->
+            <div class="agent-card" style="--agent-color:#4aa8ff; --agent-soft:rgba(74,168,255,0.12); --agent-soft-dark:rgba(74,168,255,0.28); background:rgba(45,0,80,0.06); border-color:rgba(45,0,80,0.18);">
+              <div style="position:absolute;inset:0;background:linear-gradient(135deg,rgba(74,168,255,0.28),transparent 62%);border-radius:13px;"></div>
+              <div style="position:relative;">
+                <div class="agent-logo" style="background:linear-gradient(135deg,#4aa8ff,rgba(74,168,255,0.65));">GE</div>
+                <span class="agent-name" style="color:#0d0020;">Gemini</span>
+                <span class="agent-metric" style="color:rgba(13,0,32,0.75);">650 req used</span>
+                <span class="agent-detail" style="color:rgba(13,0,32,0.5);">Requests</span>
+                <span class="agent-progress-track" style="background:rgba(45,0,80,0.15);">
+                  <span class="agent-progress-fill" style="width:65%; background:linear-gradient(90deg,#4aa8ff,rgba(45,0,80,0.4));"></span>
+                </span>
+              </div>
+            </div>
+
+            <!-- Cursor card -->
+            <div class="agent-card" style="--agent-color:#4f7cff; --agent-soft:rgba(79,124,255,0.12); --agent-soft-dark:rgba(79,124,255,0.28); background:rgba(45,0,80,0.06); border-color:rgba(45,0,80,0.18);">
+              <div style="position:absolute;inset:0;background:linear-gradient(135deg,rgba(79,124,255,0.28),transparent 62%);border-radius:13px;"></div>
+              <div style="position:relative;">
+                <div class="agent-logo" style="background:linear-gradient(135deg,#4f7cff,rgba(79,124,255,0.65));">CU</div>
+                <span class="agent-name" style="color:#0d0020;">Cursor</span>
+                <span class="agent-metric" style="color:rgba(13,0,32,0.75);">180 req used</span>
+                <span class="agent-detail" style="color:rgba(13,0,32,0.5);">Fast requests</span>
+                <span class="agent-progress-track" style="background:rgba(45,0,80,0.15);">
+                  <span class="agent-progress-fill" style="width:36%; background:linear-gradient(90deg,#4f7cff,rgba(45,0,80,0.4));"></span>
+                </span>
+              </div>
+            </div>
+
+          </div>
+        </main>
+
+        <!-- Divider -->
+        <div class="tray-divider" style="background:rgba(45,0,80,0.2);"></div>
+
+        <!-- Footer actions -->
+        <footer class="tray-action-row">
+          <button class="tray-action-btn tray-action-active" style="background:rgba(45,0,80,0.14); border-color:rgba(45,0,80,0.35); color:#0d0020;">
+            <span>⊞</span><span>Dashboard</span>
+          </button>
+          <button class="tray-action-btn" style="background:rgba(45,0,80,0.06); border-color:rgba(45,0,80,0.18); color:rgba(13,0,32,0.7);">
+            <span>⚙</span><span>Settings</span>
+          </button>
+          <button class="tray-action-btn tray-action-danger">
+            <span>⏻</span><span>Quit</span>
+          </button>
+        </footer>
+      </div>
+    </div>
+  </div>
+</body>
+</html>
