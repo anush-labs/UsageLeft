@@ -111,7 +111,7 @@ If you want to add support for your preferred agent, you can:
 
 Download the latest Ubuntu `.deb` or AppImage from:
 
-<https://github.com/anush-data-portfolio/UsageLeft/releases/latest>
+<https://github.com/anush-labs/UsageLeft/releases/latest>
 
 Install the `.deb`:
 
@@ -319,11 +319,11 @@ UsageLeft grows through provider contributions, bug fixes, and practical improve
 
 <!-- ## Star History
 
-<a href="https://www.star-history.com/?repos=anush-data-portfolio%2FUsageLeft&type=date&legend=top-left">
+<a href="https://www.star-history.com/?repos=anush-labs%2FUsageLeft&type=date&legend=top-left">
  <picture>
-   <source media="(prefers-color-scheme: dark)" srcset="https://api.star-history.com/chart?repos=anush-data-portfolio/UsageLeft&type=date&theme=dark&legend=top-left" />
-   <source media="(prefers-color-scheme: light)" srcset="https://api.star-history.com/chart?repos=anush-data-portfolio/UsageLeft&type=date&legend=top-left" />
-   <img alt="Star History Chart" src="https://api.star-history.com/chart?repos=anush-data-portfolio/UsageLeft&type=date&legend=top-left" />
+   <source media="(prefers-color-scheme: dark)" srcset="https://api.star-history.com/chart?repos=anush-labs/UsageLeft&type=date&theme=dark&legend=top-left" />
+   <source media="(prefers-color-scheme: light)" srcset="https://api.star-history.com/chart?repos=anush-labs/UsageLeft&type=date&legend=top-left" />
+   <img alt="Star History Chart" src="https://api.star-history.com/chart?repos=anush-labs/UsageLeft&type=date&legend=top-left" />
  </picture>
 </a> -->
 ## Credits
