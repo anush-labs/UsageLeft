@@ -991,6 +991,23 @@
       letter-spacing: -0.04em;
     }
 
+    @keyframes arrow-bounce {
+      0%, 100% { transform: translateX(0); }
+      50% { transform: translateX(5px); }
+    }
+    #cta-arrow { animation: arrow-bounce 1s ease-in-out infinite; }
+
+    @media (max-width: 640px) {
+      /* On mobile, CTA floats below the dropdown instead of to its left */
+      #show-dashboard-cta {
+        right: auto !important;
+        left: 16px !important;
+        top: calc(100% + 6px) !important;
+        flex-direction: row-reverse;
+      }
+      #cta-arrow { transform: rotate(0deg); }
+    }
+
     @media (max-width: 980px) {
       :root { --dock: 54px; }
       .hero { grid-template-columns: 1fr; padding-top: 50px; }
@@ -1082,7 +1099,14 @@
 
           <!-- Dropdown Menu under Top Bar (Image 1) -->
           <div id="status-dropdown-menu" style="position: absolute; top: 32px; right: 0; width: 320px; background: white; color: #333; border-radius: 8px; box-shadow: 0 10px 25px rgba(0,0,0,0.5); padding: 8px 0; display: flex; flex-direction: column; z-index: 2000; text-align: left;">
-            <div class="dropdown-item" style="padding: 8px 16px; font-size: 13px; cursor: pointer;">Show Dashboard</div>
+            <!-- Floating CTA arrow pointing at Show Dashboard -->
+            <div id="show-dashboard-cta" style="position: absolute; right: calc(100% + 10px); top: 4px; display: flex; align-items: center; gap: 8px; white-space: nowrap; pointer-events: none;">
+              <span style="color: #fff; font-size: 12px; font-weight: 600; background: rgba(168,85,247,0.85); padding: 4px 10px; border-radius: 20px; box-shadow: 0 2px 12px rgba(168,85,247,0.5);">Try it!</span>
+              <svg id="cta-arrow" width="28" height="18" viewBox="0 0 28 18" fill="none" xmlns="http://www.w3.org/2000/svg">
+                <path d="M2 9h22M18 3l6 6-6 6" stroke="white" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round"/>
+              </svg>
+            </div>
+            <div class="dropdown-item" id="show-dashboard-item" style="padding: 8px 16px; font-size: 13px; cursor: pointer; background: linear-gradient(90deg, rgba(168,85,247,0.12), transparent); border-left: 3px solid #a855f7; font-weight: 600; color: #6d28d9;">Show Dashboard</div>
             <div class="dropdown-item" style="padding: 8px 16px; font-size: 13px; cursor: pointer;">Refresh All</div>
             <div class="dropdown-divider" style="height: 1px; background: #e5e5e5; margin: 4px 16px;"></div>
             <div class="dropdown-item" style="padding: 8px 16px; font-size: 13px; cursor: pointer;">Antigravity: 100% left | Resets in 4h 55m</div>
@@ -1349,7 +1373,7 @@
     const statusDropdown = document.getElementById("status-dropdown-menu");
 
     // "Show Dashboard" scrolls to the screenshots section
-    document.querySelector('#status-dropdown-menu .dropdown-item').addEventListener('click', (e) => {
+    document.getElementById('show-dashboard-item').addEventListener('click', (e) => {
       e.stopPropagation();
       statusDropdown.style.display = "none";
       usageToggle.style.background = "transparent";
