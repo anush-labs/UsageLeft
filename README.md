@@ -6,7 +6,7 @@ UsageLeft is an Ubuntu-only app. It tracks AI coding subscription usage from the
 
 UsageLeft runs as a desktop app, stays available from Ubuntu Status Menus / AppIndicators, and gives quick access to agent sessions, usage, reset times, refresh actions, settings, and the full dashboard.
 
-![UsageLeft Screenshot](screenshot.png)
+![UsageLeft Screenshot](public/screenshot.png)
 
 ## Quick Start
 
