@@ -509,6 +509,184 @@ fn get_local_http_port() -> Option<u16> {
     local_http_api::get_port()
 }
 
+#[derive(serde::Serialize, Default)]
+struct TokenBucket {
+    input_tokens: u64,
+    output_tokens: u64,
+    cache_creation_tokens: u64,
+    cache_read_tokens: u64,
+}
+
+#[derive(serde::Serialize)]
+struct UsagePeriod {
+    label: String,
+    buckets: std::collections::HashMap<String, TokenBucket>,
+}
+
+#[derive(serde::Serialize)]
+struct ClaudeUsageStats {
+    daily: Vec<UsagePeriod>,
+    weekly: Vec<UsagePeriod>,
+    monthly: Vec<UsagePeriod>,
+}
+
+/// Returns daily/weekly/monthly token usage aggregated from ~/.claude/projects/ JSONL files.
+/// Each period contains per-model token buckets.
+#[tauri::command]
+fn get_claude_usage_stats() -> Result<ClaudeUsageStats, String> {
+    use std::collections::HashMap;
+    use std::io::{BufRead, BufReader};
+
+    let home = dirs::home_dir().ok_or("no home dir")?;
+    let projects_dir = home.join(".claude").join("projects");
+
+    // timestamp_ms → model → (input, output, cache_create, cache_read)
+    struct Entry {
+        ts_ms: i64,
+        model: String,
+        input: u64,
+        output: u64,
+        cache_create: u64,
+        cache_read: u64,
+    }
+
+    let mut entries: Vec<Entry> = Vec::new();
+
+    // Walk all .jsonl files under ~/.claude/projects/
+    let Ok(dir_iter) = std::fs::read_dir(&projects_dir) else {
+        return Ok(ClaudeUsageStats { daily: vec![], weekly: vec![], monthly: vec![] });
+    };
+
+    for project_entry in dir_iter.flatten() {
+        let project_path = project_entry.path();
+        if !project_path.is_dir() {
+            continue;
+        }
+        let Ok(files) = std::fs::read_dir(&project_path) else { continue };
+        for file_entry in files.flatten() {
+            let path = file_entry.path();
+            if path.extension().and_then(|e| e.to_str()) != Some("jsonl") {
+                continue;
+            }
+            let Ok(file) = std::fs::File::open(&path) else { continue };
+            for line in BufReader::new(file).lines().map_while(Result::ok) {
+                let Ok(val) = serde_json::from_str::<serde_json::Value>(&line) else { continue };
+                let ts_ms = val.get("timestamp").and_then(|v| v.as_i64()).unwrap_or(0);
+                if ts_ms == 0 { continue; }
+                let usage = val
+                    .pointer("/message/usage")
+                    .filter(|v| !v.is_null());
+                let Some(usage) = usage else { continue };
+                let model = val
+                    .pointer("/message/model")
+                    .and_then(|v| v.as_str())
+                    .unwrap_or("unknown")
+                    .to_string();
+                let input = usage.get("input_tokens").and_then(|v| v.as_u64()).unwrap_or(0);
+                let output = usage.get("output_tokens").and_then(|v| v.as_u64()).unwrap_or(0);
+                let cache_create = usage.get("cache_creation_input_tokens").and_then(|v| v.as_u64()).unwrap_or(0);
+                let cache_read = usage.get("cache_read_input_tokens").and_then(|v| v.as_u64()).unwrap_or(0);
+                if input + output + cache_create + cache_read == 0 { continue; }
+                entries.push(Entry { ts_ms, model, input, output, cache_create, cache_read });
+            }
+        }
+    }
+
+    // Helpers: convert ms timestamp to (year, month [1-12], day_of_year, iso_week)
+    // We use simple integer math to avoid needing chrono.
+    fn ms_to_ymd(ms: i64) -> (i32, u8, u8) {
+        let secs = ms / 1000;
+        let mut days = secs / 86400; // days since 1970-01-01
+        let mut year = 1970i32;
+        loop {
+            let days_in_year = if (year % 4 == 0 && year % 100 != 0) || year % 400 == 0 { 366i64 } else { 365i64 };
+            if days < days_in_year { break; }
+            days -= days_in_year;
+            year += 1;
+        }
+        let leap = (year % 4 == 0 && year % 100 != 0) || year % 400 == 0;
+        let month_days: &[i64] = if leap {
+            &[31, 29, 31, 30, 31, 30, 31, 31, 30, 31, 30, 31]
+        } else {
+            &[31, 28, 31, 30, 31, 30, 31, 31, 30, 31, 30, 31]
+        };
+        let mut month = 1u8;
+        for &md in month_days {
+            if days < md { break; }
+            days -= md;
+            month += 1;
+        }
+        (year, month, (days + 1) as u8)
+    }
+
+    fn ymd_to_label(y: i32, m: u8, d: u8) -> String {
+        format!("{}-{:02}-{:02}", y, m, d)
+    }
+
+    fn ms_to_week_label(ms: i64) -> String {
+        // ISO week: days_since_epoch / 7, label as "YYYY-Www"
+        let secs = ms / 1000;
+        let days = secs / 86400;
+        // Jan 4 1970 is the start of ISO week 1 1970 (Thursday)
+        // Simple approximation: use days/7 for bucket, label with year-week
+        let week_num = ((days + 3) / 7) as i32; // offset so Monday-based
+        let approx_year = 1970 + week_num / 53;
+        let week_of_year = week_num % 53;
+        format!("{}-W{:02}", approx_year, week_of_year.max(1))
+    }
+
+    fn ms_to_month_label(ms: i64) -> String {
+        let (y, m, _) = ms_to_ymd(ms);
+        format!("{}-{:02}", y, m)
+    }
+
+    // Aggregate into maps: label → model → TokenBucket
+    let mut daily_map: HashMap<String, HashMap<String, TokenBucket>> = HashMap::new();
+    let mut weekly_map: HashMap<String, HashMap<String, TokenBucket>> = HashMap::new();
+    let mut monthly_map: HashMap<String, HashMap<String, TokenBucket>> = HashMap::new();
+
+    // Only keep last 90 days of entries
+    let now_ms = std::time::SystemTime::now()
+        .duration_since(std::time::UNIX_EPOCH)
+        .map(|d| d.as_millis() as i64)
+        .unwrap_or(0);
+    let cutoff_90d = now_ms - 90 * 86400 * 1000;
+
+    for e in &entries {
+        if e.ts_ms < cutoff_90d { continue; }
+        let (y, m, d) = ms_to_ymd(e.ts_ms);
+        let day_label = ymd_to_label(y, m, d);
+        let week_label = ms_to_week_label(e.ts_ms);
+        let month_label = ms_to_month_label(e.ts_ms);
+
+        for (map, label) in [
+            (&mut daily_map, day_label),
+            (&mut weekly_map, week_label),
+            (&mut monthly_map, month_label),
+        ] {
+            let bucket = map.entry(label).or_default().entry(e.model.clone()).or_default();
+            bucket.input_tokens += e.input;
+            bucket.output_tokens += e.output;
+            bucket.cache_creation_tokens += e.cache_create;
+            bucket.cache_read_tokens += e.cache_read;
+        }
+    }
+
+    fn map_to_periods(map: HashMap<String, HashMap<String, TokenBucket>>) -> Vec<UsagePeriod> {
+        let mut periods: Vec<UsagePeriod> = map.into_iter()
+            .map(|(label, buckets)| UsagePeriod { label, buckets })
+            .collect();
+        periods.sort_by(|a, b| a.label.cmp(&b.label));
+        periods
+    }
+
+    Ok(ClaudeUsageStats {
+        daily: map_to_periods(daily_map),
+        weekly: map_to_periods(weekly_map),
+        monthly: map_to_periods(monthly_map),
+    })
+}
+
 /// Update the global shortcut registration.
 /// Pass `null` to disable the shortcut, or a shortcut string like "CommandOrControl+Shift+U".
 #[cfg(desktop)]
@@ -659,7 +837,8 @@ pub fn run() {
             write_plugin_config,
             read_plugin_config,
             list_github_accounts,
-            get_local_http_port
+            get_local_http_port,
+            get_claude_usage_stats
         ])
         .setup(|app| {
             let version = app.package_info().version.to_string();

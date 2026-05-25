@@ -5,9 +5,8 @@ import { getCurrentWindow, PhysicalSize, currentMonitor } from "@tauri-apps/api/
 import type { ActiveView } from "@/components/side-nav"
 import type { DisplayPluginState } from "@/hooks/app/use-app-plugin-views"
 
-const PANEL_WIDTH = 400
 const MAX_HEIGHT_FALLBACK_PX = 600
-const MAX_HEIGHT_FRACTION_OF_MONITOR = 0.8
+const MAX_HEIGHT_FRACTION_OF_MONITOR = 0.92
 
 type UsePanelArgs = {
   activeView: ActiveView
@@ -156,21 +155,24 @@ export function usePanel({
 
     const resizeWindow = async () => {
       const factor = window.devicePixelRatio
-      const width = Math.ceil(PANEL_WIDTH * factor)
       const desiredHeightLogical = Math.max(1, container.scrollHeight)
 
+      let monitorWidth: number | null = null
       let maxHeightPhysical: number | null = null
       let maxHeightLogical: number | null = null
 
       try {
         const monitor = await currentMonitor()
         if (monitor) {
+          monitorWidth = monitor.size.width
           maxHeightPhysical = Math.floor(monitor.size.height * MAX_HEIGHT_FRACTION_OF_MONITOR)
           maxHeightLogical = Math.floor(maxHeightPhysical / factor)
         }
       } catch {
         // fall through to fallback
       }
+
+      const width = monitorWidth ?? Math.ceil((window.screen?.availWidth || 1280) * factor)
 
       if (maxHeightLogical === null) {
         const screenAvailHeight = Number(window.screen?.availHeight) || MAX_HEIGHT_FALLBACK_PX
