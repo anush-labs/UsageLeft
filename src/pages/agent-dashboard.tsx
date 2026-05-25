@@ -138,7 +138,7 @@ export function AgentDashboard({
             No agents enabled — add one in Settings
           </div>
         ) : (
-          <div className="grid grid-cols-2 gap-3">
+          <div className="grid grid-cols-1 min-[280px]:grid-cols-2 min-[420px]:grid-cols-3 gap-3">
             {plugins.map((plugin) => {
               const brandColor = plugin.meta.brandColor || "#a855f7"
               const metric = getDashboardMetric(plugin)
