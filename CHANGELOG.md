@@ -1,5 +1,25 @@
 # Changelog
 
+## v0.6.25
+
+### New Features
+- Rename project from OpenUsage to UsageLeft
+- Add agent dashboard with tray integration and sidebar navigation
+- Add agent sidebar and bottom navigation bar with Claude usage chart
+- Add Rust commands for plugin config, GitHub account management, and quit
+- Add Claude local usage stats panel and command
+- Expand Copilot plugin with username and account selection support
+- Add Linux path support to Antigravity plugin
+
+### Improvements
+- Switch release CI to Linux-only Ubuntu builds (`.deb` + `.AppImage`)
+- Refresh app icons and branding assets for UsageLeft
+- Enhance plugin color customization and UI polish
+- Add dev tooling: screenshot scripts, release-tag skill, rename utility
+- Update trademark policy and window sizing
+
+---
+
 ## UsageLeft Starts Here
 
 UsageLeft is a fork of OpenUsage. All changes below this point represent the history of the original OpenUsage project.
