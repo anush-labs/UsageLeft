@@ -1,29 +1,42 @@
 use super::cache::{cache_state, enabled_snapshots_ordered};
 use std::io::{Read, Write};
 use std::net::{TcpListener, TcpStream};
-
-const BIND_ADDR: &str = "127.0.0.1:6736";
+use std::sync::OnceLock;
 
 // ---------------------------------------------------------------------------
 // HTTP server
 // ---------------------------------------------------------------------------
 
+pub static BOUND_PORT: OnceLock<u16> = OnceLock::new();
+
 pub fn start_server() {
     std::thread::spawn(|| {
-        let listener = match TcpListener::bind(BIND_ADDR) {
-            Ok(l) => {
-                log::info!("local HTTP API listening on {}", BIND_ADDR);
-                l
+        let mut listener = None;
+        let mut port_found = 0;
+        for port in 6736..=6750 {
+            let addr = format!("127.0.0.1:{}", port);
+            match TcpListener::bind(&addr) {
+                Ok(l) => {
+                    log::info!("local HTTP API listening on {}", addr);
+                    listener = Some(l);
+                    port_found = port;
+                    break;
+                }
+                Err(_) => {
+                    log::debug!("Port {} in use, trying next...", port);
+                }
             }
-            Err(e) => {
-                log::warn!(
-                    "failed to bind local HTTP API on {}: {} — feature disabled for this session",
-                    BIND_ADDR,
-                    e
-                );
+        }
+
+        let listener = match listener {
+            Some(l) => l,
+            None => {
+                log::warn!("failed to bind local HTTP API on any port from 6736-6750 — feature disabled");
                 return;
             }
         };
+
+        BOUND_PORT.set(port_found).ok();
 
         for stream in listener.incoming() {
             match stream {
@@ -155,7 +168,7 @@ fn response_method_not_allowed() -> String {
 
 #[cfg(test)]
 mod tests {
-    use super::super::cache::{cache_state, CachedPluginSnapshot};
+    use super::super::cache::{CachedPluginSnapshot, cache_state};
     use super::*;
     use serial_test::serial;
 

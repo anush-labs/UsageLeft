@@ -15,9 +15,8 @@ fn monitor_contains_physical_point(
 }
 
 fn configured_window_size() -> (f64, f64) {
-    let conf: serde_json::Value =
-        serde_json::from_str(include_str!("../tauri.conf.json"))
-            .expect("tauri.conf.json must be valid JSON");
+    let conf: serde_json::Value = serde_json::from_str(include_str!("../tauri.conf.json"))
+        .expect("tauri.conf.json must be valid JSON");
     let window = &conf["app"]["windows"][0];
     (
         window["width"]
@@ -32,17 +31,16 @@ fn configured_window_size() -> (f64, f64) {
 fn window_logical_size(window: &tauri::WebviewWindow) -> (f64, f64) {
     let (fallback_width, fallback_height) = configured_window_size();
     match (window.outer_size(), window.scale_factor()) {
-        (Ok(size), Ok(scale)) if scale > 0.0 => (
-            size.width as f64 / scale,
-            size.height as f64 / scale,
-        ),
+        (Ok(size), Ok(scale)) if scale > 0.0 => {
+            (size.width as f64 / scale, size.height as f64 / scale)
+        }
         _ => (fallback_width, fallback_height),
     }
 }
 
 fn center_window(window: &tauri::WebviewWindow) {
     if let Err(error) = window.center() {
-        log::warn!("Failed to center OpenUsage window: {}", error);
+        log::warn!("Failed to center UsageLeft window: {}", error);
     }
 }
 
@@ -82,34 +80,34 @@ pub fn init(app_handle: &tauri::AppHandle) -> tauri::Result<()> {
 pub fn hide_panel(app_handle: &AppHandle) {
     if let Some(window) = app_handle.get_webview_window("main") {
         if let Err(error) = window.hide() {
-            log::warn!("Failed to hide OpenUsage window: {}", error);
+            log::warn!("Failed to hide UsageLeft window: {}", error);
         }
     }
 }
 
 pub fn show_panel(app_handle: &AppHandle) {
     let Some(window) = app_handle.get_webview_window("main") else {
-        log::warn!("OpenUsage main window not found");
+        log::warn!("UsageLeft main window not found");
         return;
     };
 
     position_panel_from_tray(app_handle);
 
     if let Err(error) = window.show() {
-        log::warn!("Failed to show OpenUsage window: {}", error);
+        log::warn!("Failed to show UsageLeft window: {}", error);
         return;
     }
     if let Err(error) = window.unminimize() {
-        log::warn!("Failed to unminimize OpenUsage window: {}", error);
+        log::warn!("Failed to unminimize UsageLeft window: {}", error);
     }
     if let Err(error) = window.set_focus() {
-        log::warn!("Failed to focus OpenUsage window: {}", error);
+        log::warn!("Failed to focus UsageLeft window: {}", error);
     }
 }
 
 pub fn toggle_panel(app_handle: &AppHandle) {
     let Some(window) = app_handle.get_webview_window("main") else {
-        log::warn!("OpenUsage main window not found");
+        log::warn!("UsageLeft main window not found");
         return;
     };
 
@@ -117,7 +115,7 @@ pub fn toggle_panel(app_handle: &AppHandle) {
         Ok(true) => hide_panel(app_handle),
         Ok(false) => show_panel(app_handle),
         Err(error) => {
-            log::warn!("Failed to read OpenUsage window visibility: {}", error);
+            log::warn!("Failed to read UsageLeft window visibility: {}", error);
             show_panel(app_handle);
         }
     }
@@ -222,8 +220,10 @@ pub fn position_panel_at_tray_icon(
         above_y.max(monitor_logical_y + gap)
     };
 
-    if let Err(error) = window.set_position(Position::Logical(LogicalPosition::new(panel_x, panel_y))) {
-        log::warn!("Failed to position OpenUsage window: {}", error);
+    if let Err(error) =
+        window.set_position(Position::Logical(LogicalPosition::new(panel_x, panel_y)))
+    {
+        log::warn!("Failed to position UsageLeft window: {}", error);
         center_window(&window);
     }
 }

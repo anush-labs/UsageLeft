@@ -15,5 +15,5 @@ fn main() {
     #[cfg(target_os = "linux")]
     configure_linux_webkit();
 
-    openusage_lib::run()
+    usageleft_lib::run()
 }

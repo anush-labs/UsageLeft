@@ -195,6 +195,12 @@ fn hide_panel(app_handle: tauri::AppHandle) {
 }
 
 #[tauri::command]
+fn quit_app(app_handle: tauri::AppHandle) {
+    log::info!("quit requested via app panel");
+    app_handle.exit(0);
+}
+
+#[tauri::command]
 fn open_devtools(#[allow(unused)] app_handle: tauri::AppHandle) {
     #[cfg(debug_assertions)]
     {
@@ -338,6 +344,149 @@ async fn start_probe_batch(
 }
 
 #[tauri::command]
+fn write_plugin_config(
+    app_handle: tauri::AppHandle,
+    plugin_id: String,
+    config_json: String,
+) -> Result<(), String> {
+    if plugin_id.contains('/') || plugin_id.contains('\\') || plugin_id.contains('.') {
+        return Err(format!("invalid plugin_id: {}", plugin_id));
+    }
+    serde_json::from_str::<serde_json::Value>(&config_json)
+        .map_err(|e| format!("config_json is not valid JSON: {}", e))?;
+    let app_data_dir = app_handle
+        .path()
+        .app_data_dir()
+        .map_err(|e| e.to_string())?;
+    let config_dir = app_data_dir.join("plugins_data").join(&plugin_id);
+    std::fs::create_dir_all(&config_dir).map_err(|e| e.to_string())?;
+    let config_file = config_dir.join("config.json");
+    std::fs::write(&config_file, config_json.as_bytes()).map_err(|e| e.to_string())?;
+    log::info!("wrote plugin config for {}", plugin_id);
+    Ok(())
+}
+
+#[tauri::command]
+fn read_plugin_config(
+    app_handle: tauri::AppHandle,
+    plugin_id: String,
+) -> Result<Option<String>, String> {
+    if plugin_id.contains('/') || plugin_id.contains('\\') || plugin_id.contains('.') {
+        return Err(format!("invalid plugin_id: {}", plugin_id));
+    }
+    let app_data_dir = app_handle
+        .path()
+        .app_data_dir()
+        .map_err(|e| e.to_string())?;
+    let config_file = app_data_dir
+        .join("plugins_data")
+        .join(&plugin_id)
+        .join("config.json");
+    if !config_file.exists() {
+        return Ok(None);
+    }
+    let content = std::fs::read_to_string(&config_file).map_err(|e| e.to_string())?;
+    Ok(Some(content))
+}
+
+fn normalize_gh_account(value: &str) -> Option<String> {
+    let trimmed = value
+        .trim()
+        .trim_matches('"')
+        .trim_matches('\'')
+        .trim()
+        .to_string();
+    if trimmed.is_empty() {
+        None
+    } else {
+        Some(trimmed)
+    }
+}
+
+fn push_unique_gh_account(accounts: &mut Vec<String>, value: &str) {
+    if let Some(account) = normalize_gh_account(value) {
+        if !accounts.iter().any(|existing| existing == &account) {
+            accounts.push(account);
+        }
+    }
+}
+
+fn parse_gh_hosts_accounts(text: &str) -> Vec<String> {
+    let mut accounts = Vec::new();
+    let mut phase = 0_u8;
+    let mut users_indent = 0_usize;
+    let mut username_indent: Option<usize> = None;
+
+    for line in text.lines() {
+        let trimmed = line.trim();
+        if trimmed.is_empty() || trimmed.starts_with('#') {
+            continue;
+        }
+        let indent = line
+            .chars()
+            .take_while(|ch| *ch == ' ' || *ch == '\t')
+            .count();
+
+        if phase == 0 {
+            if trimmed == "github.com:" {
+                phase = 1;
+            }
+        } else if phase == 1 {
+            if indent == 0 {
+                break;
+            }
+            if let Some(account) = trimmed.strip_prefix("user:") {
+                push_unique_gh_account(&mut accounts, account);
+            }
+            if trimmed == "users:" {
+                users_indent = indent;
+                phase = 2;
+            }
+        } else {
+            if indent <= users_indent {
+                if let Some(account) = trimmed.strip_prefix("user:") {
+                    push_unique_gh_account(&mut accounts, account);
+                }
+                break;
+            }
+            if username_indent.is_none() {
+                username_indent = Some(indent);
+            }
+            if Some(indent) == username_indent && trimmed.ends_with(':') {
+                push_unique_gh_account(&mut accounts, &trimmed[..trimmed.len() - 1]);
+            } else if Some(indent) < username_indent {
+                break;
+            }
+        }
+    }
+
+    accounts
+}
+
+fn gh_hosts_path() -> Option<PathBuf> {
+    if let Some(config_dir) = std::env::var_os("GH_CONFIG_DIR") {
+        if !config_dir.is_empty() {
+            return Some(PathBuf::from(config_dir).join("hosts.yml"));
+        }
+    }
+    std::env::var_os("HOME")
+        .map(PathBuf::from)
+        .map(|home| home.join(".config").join("gh").join("hosts.yml"))
+}
+
+#[tauri::command]
+fn list_github_accounts() -> Result<Vec<String>, String> {
+    let Some(path) = gh_hosts_path() else {
+        return Ok(Vec::new());
+    };
+    if !path.exists() {
+        return Ok(Vec::new());
+    }
+    let text = std::fs::read_to_string(&path).map_err(|e| e.to_string())?;
+    Ok(parse_gh_hosts_accounts(&text))
+}
+
+#[tauri::command]
 fn get_log_path(app_handle: tauri::AppHandle) -> Result<String, String> {
     let log_dir = app_handle
         .path()
@@ -353,6 +502,11 @@ fn update_tray_status_menu(
     payload: tray::TrayStatusMenuPayload,
 ) -> Result<(), String> {
     tray::update_status_menu(&app_handle, payload)
+}
+
+#[tauri::command]
+fn get_local_http_port() -> Option<u16> {
+    local_http_api::get_port()
 }
 
 /// Update the global shortcut registration.
@@ -495,16 +649,21 @@ pub fn run() {
         .invoke_handler(tauri::generate_handler![
             init_panel,
             hide_panel,
+            quit_app,
             open_devtools,
             start_probe_batch,
             list_plugins,
             get_log_path,
             update_global_shortcut,
-            update_tray_status_menu
+            update_tray_status_menu,
+            write_plugin_config,
+            read_plugin_config,
+            list_github_accounts,
+            get_local_http_port
         ])
         .setup(|app| {
             let version = app.package_info().version.to_string();
-            log::info!("OpenUsage v{} starting", version);
+            log::info!("UsageLeft v{} starting", version);
 
             // Load config early (lazy init via OnceLock, zero-cost after)
             let _proxy = config::get_resolved_proxy();
@@ -586,7 +745,8 @@ pub fn run() {
 #[cfg(test)]
 mod tests {
     use super::{
-        DAILY_ACTIVE_TRACKED_DAY_KEY, seconds_until_next_utc_day, should_track_daily_active,
+        DAILY_ACTIVE_TRACKED_DAY_KEY, parse_gh_hosts_accounts, seconds_until_next_utc_day,
+        should_track_daily_active,
     };
     use time::{Date, Month, PrimitiveDateTime, Time};
 
@@ -621,5 +781,34 @@ mod tests {
         .assume_utc();
 
         assert_eq!(seconds_until_next_utc_day(now), 10);
+    }
+
+    #[test]
+    fn parses_multiple_github_cli_accounts() {
+        let hosts = r#"
+github.com:
+    git_protocol: https
+    users:
+        user-a:
+        user-b:
+        user-a:
+    user: user-b
+other.example.com:
+    users:
+        ignored:
+"#;
+
+        assert_eq!(parse_gh_hosts_accounts(hosts), vec!["user-a", "user-b"]);
+    }
+
+    #[test]
+    fn parses_legacy_github_cli_user() {
+        let hosts = r#"
+github.com:
+    oauth_token: REDACTED
+    user: legacy-user
+"#;
+
+        assert_eq!(parse_gh_hosts_accounts(hosts), vec!["legacy-user"]);
     }
 }

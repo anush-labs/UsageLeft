@@ -100,8 +100,13 @@ fn populate_status_menu(
     menu: &TrayMenu,
     payload: &TrayStatusMenuPayload,
 ) -> tauri::Result<()> {
-    let show_stats =
-        MenuItem::with_id(app_handle, "show_stats", "Show Dashboard", true, None::<&str>)?;
+    let show_stats = MenuItem::with_id(
+        app_handle,
+        "show_stats",
+        "Show Dashboard",
+        true,
+        None::<&str>,
+    )?;
     menu.append(&show_stats)?;
 
     let refresh_all =
@@ -134,17 +139,9 @@ fn populate_status_menu(
 
     menu.append(&PredefinedMenuItem::separator(app_handle)?)?;
 
-    let go_to_settings = MenuItem::with_id(
-        app_handle,
-        "go_to_settings",
-        "Settings",
-        true,
-        None::<&str>,
-    )?;
+    let go_to_settings =
+        MenuItem::with_id(app_handle, "go_to_settings", "Settings", true, None::<&str>)?;
     menu.append(&go_to_settings)?;
-
-    let about = MenuItem::with_id(app_handle, "about", "About OpenUsage", true, None::<&str>)?;
-    menu.append(&about)?;
 
     let quit = MenuItem::with_id(app_handle, "quit", "Quit", true, None::<&str>)?;
     menu.append(&quit)?;
@@ -193,12 +190,7 @@ pub fn create(app_handle: &AppHandle) -> tauri::Result<()> {
     let current_level = get_stored_log_level(app_handle);
     log::set_max_level(current_level);
 
-    let menu = build_status_menu(
-        app_handle,
-        &TrayStatusMenuPayload {
-            agents: Vec::new(),
-        },
-    )?;
+    let menu = build_status_menu(app_handle, &TrayStatusMenuPayload { agents: Vec::new() })?;
     if let Ok(mut locked_menu) = tray_menu_slot().lock() {
         *locked_menu = Some(menu.clone());
     } else {
@@ -208,14 +200,15 @@ pub fn create(app_handle: &AppHandle) -> tauri::Result<()> {
     TrayIconBuilder::with_id("tray")
         .icon(icon)
         .icon_as_template(true)
-        .tooltip("OpenUsage")
+        .tooltip("UsageLeft")
         .menu(&menu)
         .show_menu_on_left_click(true)
         .on_menu_event(move |app_handle, event| {
             let event_id = event.id.as_ref();
             log::debug!("tray menu: {}", event_id);
 
-            if let Some(plugin_id) = event_id.strip_prefix(AGENT_MENU_PREFIX) {
+            if let Some(raw_plugin_id) = event_id.strip_prefix(AGENT_MENU_PREFIX) {
+                let plugin_id = raw_plugin_id.split(':').next().unwrap_or(raw_plugin_id);
                 show_panel(app_handle);
                 let _ = app_handle.emit("tray:navigate", plugin_id);
                 return;
@@ -232,10 +225,6 @@ pub fn create(app_handle: &AppHandle) -> tauri::Result<()> {
                 "go_to_settings" => {
                     show_panel(app_handle);
                     let _ = app_handle.emit("tray:navigate", "settings");
-                }
-                "about" => {
-                    show_panel(app_handle);
-                    let _ = app_handle.emit("tray:show-about", ());
                 }
                 "quit" => {
                     log::info!("quit requested via tray");

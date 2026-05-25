@@ -6,7 +6,7 @@ use std::sync::{Mutex, OnceLock};
 
 const CACHE_FILE_NAME: &str = "usage-api-cache.json";
 const SETTINGS_FILE_NAME: &str = "settings.json";
-const DEFAULT_ENABLED_PLUGINS: &[&str] = &["claude", "codex", "cursor"];
+const DEFAULT_ENABLED_PLUGINS: &[&str] = &["claude", "codex", "cursor", "gemini", "copilot"];
 
 // ---------------------------------------------------------------------------
 // Types
@@ -67,7 +67,10 @@ pub fn load_cache(app_data_dir: &Path) -> HashMap<String, CachedPluginSnapshot> 
             HashMap::new()
         }
         Err(e) => {
-            log::warn!("failed to parse usage-api-cache.json: {}, starting empty", e);
+            log::warn!(
+                "failed to parse usage-api-cache.json: {}, starting empty",
+                e
+            );
             HashMap::new()
         }
     }
@@ -120,9 +123,7 @@ pub fn cache_successful_output(output: &PluginOutput) {
     };
 
     let mut state = cache_state().lock().expect("cache state poisoned");
-    state
-        .snapshots
-        .insert(output.provider_id.clone(), snapshot);
+    state.snapshots.insert(output.provider_id.clone(), snapshot);
     save_cache(&state.app_data_dir, &state.snapshots);
 }
 
@@ -224,7 +225,7 @@ mod tests {
     #[test]
     fn cache_file_round_trip() {
         let dir = std::env::temp_dir().join(format!(
-            "openusage-test-cache-{}",
+            "usageleft-test-cache-{}",
             std::time::SystemTime::now()
                 .duration_since(std::time::UNIX_EPOCH)
                 .unwrap()
@@ -248,7 +249,7 @@ mod tests {
     #[test]
     fn load_cache_returns_empty_on_missing_file() {
         let dir = std::env::temp_dir().join(format!(
-            "openusage-test-no-cache-{}",
+            "usageleft-test-no-cache-{}",
             std::time::SystemTime::now()
                 .duration_since(std::time::UNIX_EPOCH)
                 .unwrap()
@@ -261,7 +262,7 @@ mod tests {
     #[test]
     fn load_cache_returns_empty_on_invalid_json() {
         let dir = std::env::temp_dir().join(format!(
-            "openusage-test-bad-cache-{}",
+            "usageleft-test-bad-cache-{}",
             std::time::SystemTime::now()
                 .duration_since(std::time::UNIX_EPOCH)
                 .unwrap()

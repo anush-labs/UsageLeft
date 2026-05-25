@@ -86,76 +86,7 @@ fn read_command_stdout(program: &str, args: &[&str]) -> Option<String> {
     Some(String::from_utf8_lossy(&output.stdout).into_owned())
 }
 
-fn read_env_value_via_command(program: &str, args: &[&str]) -> Option<String> {
-    let stdout = read_command_stdout(program, args)?;
-    sanitize_env_value(&stdout)
-}
 
-fn current_macos_keychain_account_from_user_env(user_env: Option<String>) -> String {
-    user_env
-        .and_then(|value| {
-            let trimmed = value.trim();
-            if trimmed.is_empty() {
-                None
-            } else {
-                Some(trimmed.to_string())
-            }
-        })
-        .or_else(|| read_env_value_via_command("id", &["-un"]))
-        .unwrap_or_else(|| "openusage-user".to_string())
-}
-
-fn current_macos_keychain_account() -> String {
-    current_macos_keychain_account_from_user_env(read_env_from_process("USER"))
-}
-
-fn keychain_find_generic_password_args(service: &str) -> Vec<OsString> {
-    vec![
-        OsString::from("find-generic-password"),
-        OsString::from("-s"),
-        OsString::from(service),
-        OsString::from("-w"),
-    ]
-}
-
-fn keychain_find_generic_password_args_for_account(service: &str, account: &str) -> Vec<OsString> {
-    vec![
-        OsString::from("find-generic-password"),
-        OsString::from("-a"),
-        OsString::from(account),
-        OsString::from("-s"),
-        OsString::from(service),
-        OsString::from("-w"),
-    ]
-}
-
-fn keychain_add_generic_password_args(service: &str, value: &str) -> Vec<OsString> {
-    vec![
-        OsString::from("add-generic-password"),
-        OsString::from("-U"),
-        OsString::from("-s"),
-        OsString::from(service),
-        OsString::from("-w"),
-        OsString::from(value),
-    ]
-}
-
-fn keychain_add_generic_password_args_for_account(
-    service: &str,
-    account: &str,
-    value: &str,
-) -> Vec<OsString> {
-    vec![
-        OsString::from("add-generic-password"),
-        OsString::from("-U"),
-        OsString::from("-a"),
-        OsString::from(account),
-        OsString::from("-s"),
-        OsString::from(service),
-        OsString::from("-w"),
-        OsString::from(value),
-    ]
-}
 
 fn terminal_env_cache() -> &'static Mutex<HashMap<String, Option<String>>> {
     static CACHE: OnceLock<Mutex<HashMap<String, Option<String>>>> = OnceLock::new();
@@ -178,8 +109,8 @@ fn shell_from_env() -> Option<String> {
 }
 
 fn read_env_from_interactive_shell(program: &str, name: &str) -> Option<String> {
-    const START_MARKER: &str = "__OPENUSAGE_ENV_START__";
-    const END_MARKER: &str = "__OPENUSAGE_ENV_END__";
+    const START_MARKER: &str = "__USAGELEFT_ENV_START__";
+    const END_MARKER: &str = "__USAGELEFT_ENV_END__";
 
     let script = format!(
         "printf '{}\\n'; printenv {}; printf '{}\\n'",
@@ -550,9 +481,10 @@ pub fn inject_host_api<'js>(
     inject_sqlite(ctx, &host)?;
     inject_ls(ctx, &host, plugin_id)?;
     inject_ccusage(ctx, &host, plugin_id)?;
+    inject_gh_token(ctx, &host, plugin_id)?;
 
     probe_ctx.set("host", host)?;
-    globals.set("__openusage_ctx", probe_ctx)?;
+    globals.set("__usageleft_ctx", probe_ctx)?;
 
     Ok(())
 }
@@ -847,8 +779,8 @@ fn inject_http<'js>(ctx: &Ctx<'js>, host: &Object<'js>, plugin_id: &str) -> rqui
     ctx.eval::<(), _>(
         r#"
         (function() {
-            // Will be patched after __openusage_ctx is set.
-            if (typeof __openusage_ctx !== "undefined") {
+            // Will be patched after __usageleft_ctx is set.
+            if (typeof __usageleft_ctx !== "undefined") {
                 void 0;
             }
         })();
@@ -865,8 +797,8 @@ pub fn patch_http_wrapper(ctx: &rquickjs::Ctx<'_>) -> rquickjs::Result<()> {
     ctx.eval::<(), _>(
         r#"
         (function() {
-            var rawFn = __openusage_ctx.host.http._requestRaw;
-            __openusage_ctx.host.http.request = function(req) {
+            var rawFn = __usageleft_ctx.host.http._requestRaw;
+            __usageleft_ctx.host.http.request = function(req) {
                 var json = JSON.stringify({
                     url: req.url,
                     method: req.method || "GET",
@@ -884,12 +816,12 @@ pub fn patch_http_wrapper(ctx: &rquickjs::Ctx<'_>) -> rquickjs::Result<()> {
     )
 }
 
-/// Inject utility APIs (line builders, formatters, base64, jwt) onto __openusage_ctx
+/// Inject utility APIs (line builders, formatters, base64, jwt) onto __usageleft_ctx
 pub fn inject_utils(ctx: &rquickjs::Ctx<'_>) -> rquickjs::Result<()> {
     ctx.eval::<(), _>(
         r#"
         (function() {
-            var ctx = __openusage_ctx;
+            var ctx = __usageleft_ctx;
 
             // Line builders (options object API)
             ctx.line = {
@@ -1251,7 +1183,7 @@ fn inject_ls<'js>(ctx: &Ctx<'js>, host: &Object<'js>, plugin_id: &str) -> rquick
 
                 // Find the target process. Marker patterns are Codeium-derived.
                 // Matching priority:
-                //   1. Exact --ide_name / --app_data_dir flag value (prevents
+                //   1. Exact ide/app data flag value (prevents
                 //      "windsurf" matching "windsurf-next")
                 //   2. Path substring (/<marker>/) as fallback when no flags found
                 let mut found: Option<(i32, String)> = None;
@@ -1278,21 +1210,35 @@ fn inject_ls<'js>(ctx: &Ctx<'js>, host: &Object<'js>, plugin_id: &str) -> rquick
                         continue;
                     }
 
-                    let ide_name = ls_extract_flag(command, "--ide_name").map(|v| v.to_lowercase());
+                    let ide_name = ls_extract_first_flag(
+                        command,
+                        &[
+                            "--ide_name",
+                            "-ide_name",
+                            "--override_ide_name",
+                            "-override_ide_name",
+                        ],
+                    )
+                    .map(|v| v.to_lowercase());
                     let app_data =
-                        ls_extract_flag(command, "--app_data_dir").map(|v| v.to_lowercase());
+                        ls_extract_first_flag(command, &["--app_data_dir", "-app_data_dir"])
+                            .map(|v| v.to_lowercase());
 
                     let has_marker = markers_lower.iter().any(|m| {
-                        // Prefer exact flag match; skip path fallback when
-                        // a distinguishing flag exists.
-                        if let Some(ref name) = ide_name {
-                            return *name == *m;
+                        // --ide_name is a logical name, so keep exact matching.
+                        let ide_name_matches = ide_name.as_ref().is_some_and(|name| name == m);
+                        // --app_data_dir is often a full path like ~/.config/Antigravity.
+                        let app_data_matches = app_data
+                            .as_ref()
+                            .is_some_and(|dir| ls_marker_matches_path_value(dir, m));
+
+                        if ide_name.is_some() || app_data.is_some() {
+                            return ide_name_matches || app_data_matches;
                         }
-                        if let Some(ref dir) = app_data {
-                            return *dir == *m;
-                        }
-                        // Fallback: path substring
-                        command_lower.contains(&format!("/{}/", m))
+
+                        command_lower
+                            .split_whitespace()
+                            .any(|part| ls_marker_matches_path_value(part, m))
                     });
                     if !has_marker {
                         continue;
@@ -1412,8 +1358,8 @@ pub fn patch_ls_wrapper(ctx: &rquickjs::Ctx<'_>) -> rquickjs::Result<()> {
     ctx.eval::<(), _>(
         r#"
         (function() {
-            var rawFn = __openusage_ctx.host.ls._discoverRaw;
-            __openusage_ctx.host.ls.discover = function(opts) {
+            var rawFn = __usageleft_ctx.host.ls._discoverRaw;
+            __usageleft_ctx.host.ls.discover = function(opts) {
                 var optsJson;
                 try { optsJson = JSON.stringify(opts); } catch (e) { return null; }
                 var json = rawFn(optsJson);
@@ -1441,6 +1387,15 @@ fn ls_extract_flag(command: &str, flag: &str) -> Option<String> {
         }
     }
     None
+}
+
+fn ls_extract_first_flag(command: &str, flags: &[&str]) -> Option<String> {
+    flags.iter().find_map(|flag| ls_extract_flag(command, flag))
+}
+
+fn ls_marker_matches_path_value(value: &str, marker: &str) -> bool {
+    let trimmed = value.trim_matches(|ch| ch == '"' || ch == '\'');
+    trimmed == marker || trimmed.split(['/', '\\']).any(|segment| segment == marker)
 }
 
 /// Parse listening port numbers from `lsof -nP -iTCP -sTCP:LISTEN` output.
@@ -2236,8 +2191,8 @@ pub fn patch_ccusage_wrapper(ctx: &rquickjs::Ctx<'_>) -> rquickjs::Result<()> {
     ctx.eval::<(), _>(
         r#"
         (function() {
-            var rawFn = __openusage_ctx.host.ccusage._queryRaw;
-            __openusage_ctx.host.ccusage.query = function(opts) {
+            var rawFn = __usageleft_ctx.host.ccusage._queryRaw;
+            __usageleft_ctx.host.ccusage.query = function(opts) {
                 var result = rawFn(JSON.stringify(opts || {}));
                 try {
                     var parsed = JSON.parse(result);
@@ -2256,251 +2211,141 @@ pub fn patch_ccusage_wrapper(ctx: &rquickjs::Ctx<'_>) -> rquickjs::Result<()> {
 fn inject_keychain<'js>(
     ctx: &Ctx<'js>,
     host: &Object<'js>,
-    plugin_id: &str,
+    _plugin_id: &str,
 ) -> rquickjs::Result<()> {
     let keychain_obj = Object::new(ctx.clone())?;
-    let pid_read = plugin_id.to_string();
 
     keychain_obj.set(
         "readGenericPassword",
         Function::new(
             ctx.clone(),
-            move |ctx_inner: Ctx<'_>, service: String| -> rquickjs::Result<String> {
-                if !cfg!(target_os = "macos") {
-                    return Err(Exception::throw_message(
-                        &ctx_inner,
-                        "keychain API is only supported on macOS",
-                    ));
-                }
-                log::info!("[plugin:{}] keychain read: service={}", pid_read, service);
-                let output = std::process::Command::new("security")
-                    .args(keychain_find_generic_password_args(&service))
-                    .output()
-                    .map_err(|e| {
-                        Exception::throw_message(
-                            &ctx_inner,
-                            &format!("keychain read failed: {}", e),
-                        )
-                    })?;
-
-                if !output.status.success() {
-                    let stderr = String::from_utf8_lossy(&output.stderr);
-                    let first_line = stderr.lines().next().unwrap_or("").trim();
-                    log::warn!(
-                        "[plugin:{}] keychain read miss: service={}, error={}",
-                        pid_read,
-                        service,
-                        first_line
-                    );
-                    return Err(Exception::throw_message(
-                        &ctx_inner,
-                        &format!("keychain item not found: {}", first_line),
-                    ));
-                }
-
-                log::info!(
-                    "[plugin:{}] keychain read hit: service={}",
-                    pid_read,
-                    service
-                );
-                Ok(String::from_utf8_lossy(&output.stdout).trim().to_string())
+            move |ctx_inner: Ctx<'_>, _service: String| -> rquickjs::Result<String> {
+                Err(Exception::throw_message(
+                    &ctx_inner,
+                    "keychain API is only supported on macOS",
+                ))
             },
         )?,
     )?;
 
-    let pid_read_current_user = plugin_id.to_string();
     keychain_obj.set(
         "readGenericPasswordForCurrentUser",
         Function::new(
             ctx.clone(),
-            move |ctx_inner: Ctx<'_>, service: String| -> rquickjs::Result<String> {
-                if !cfg!(target_os = "macos") {
-                    return Err(Exception::throw_message(
-                        &ctx_inner,
-                        "keychain API is only supported on macOS",
-                    ));
-                }
-                let account = current_macos_keychain_account();
-                let args = keychain_find_generic_password_args_for_account(&service, &account);
-                let redacted_account = redact_value(&account);
-                log::info!(
-                    "[plugin:{}] keychain read: service={}, account={}",
-                    pid_read_current_user,
-                    service,
-                    redacted_account
-                );
-                let output = std::process::Command::new("security")
-                    .args(&args)
-                    .output()
-                    .map_err(|e| {
-                        Exception::throw_message(
-                            &ctx_inner,
-                            &format!("keychain read failed: {}", e),
-                        )
-                    })?;
-
-                if !output.status.success() {
-                    let stderr = String::from_utf8_lossy(&output.stderr);
-                    let first_line = stderr.lines().next().unwrap_or("").trim();
-                    log::warn!(
-                        "[plugin:{}] keychain read miss: service={}, account={}, error={}",
-                        pid_read_current_user,
-                        service,
-                        redacted_account,
-                        first_line
-                    );
-                    return Err(Exception::throw_message(
-                        &ctx_inner,
-                        &format!("keychain item not found: {}", first_line),
-                    ));
-                }
-
-                log::info!(
-                    "[plugin:{}] keychain read hit: service={}, account={}",
-                    pid_read_current_user,
-                    service,
-                    redacted_account
-                );
-                Ok(String::from_utf8_lossy(&output.stdout).trim().to_string())
+            move |ctx_inner: Ctx<'_>, _service: String| -> rquickjs::Result<String> {
+                Err(Exception::throw_message(
+                    &ctx_inner,
+                    "keychain API is only supported on macOS",
+                ))
             },
         )?,
     )?;
 
-    let pid_write = plugin_id.to_string();
     keychain_obj.set(
         "writeGenericPassword",
         Function::new(
             ctx.clone(),
-            move |ctx_inner: Ctx<'_>, service: String, value: String| -> rquickjs::Result<()> {
-                if !cfg!(target_os = "macos") {
-                    return Err(Exception::throw_message(
-                        &ctx_inner,
-                        "keychain API is only supported on macOS",
-                    ));
-                }
-                log::info!("[plugin:{}] keychain write: service={}", pid_write, service);
-
-                let mut account_arg: Option<String> = None;
-                let find_output = std::process::Command::new("security")
-                    .args(["find-generic-password", "-s", &service])
-                    .output();
-
-                if let Ok(output) = find_output {
-                    if output.status.success() {
-                        let stdout = String::from_utf8_lossy(&output.stdout);
-                        for line in stdout.lines() {
-                            if let Some(start) = line.find("\"acct\"<blob>=\"") {
-                                let rest = &line[start + 14..];
-                                if let Some(end) = rest.find('"') {
-                                    account_arg = Some(rest[..end].to_string());
-                                    break;
-                                }
-                            }
-                        }
-                    }
-                }
-
-                let output = if let Some(ref acct) = account_arg {
-                    std::process::Command::new("security")
-                        .args(keychain_add_generic_password_args_for_account(
-                            &service, acct, &value,
-                        ))
-                        .output()
-                } else {
-                    std::process::Command::new("security")
-                        .args(keychain_add_generic_password_args(&service, &value))
-                        .output()
-                }
-                .map_err(|e| {
-                    Exception::throw_message(&ctx_inner, &format!("keychain write failed: {}", e))
-                })?;
-
-                if !output.status.success() {
-                    let stderr = String::from_utf8_lossy(&output.stderr);
-                    let first_line = stderr.lines().next().unwrap_or("").trim();
-                    log::warn!(
-                        "[plugin:{}] keychain write failed: service={}, error={}",
-                        pid_write,
-                        service,
-                        first_line
-                    );
-                    return Err(Exception::throw_message(
-                        &ctx_inner,
-                        &format!("keychain write failed: {}", first_line),
-                    ));
-                }
-
-                log::info!(
-                    "[plugin:{}] keychain write succeeded: service={}",
-                    pid_write,
-                    service
-                );
-                Ok(())
+            move |ctx_inner: Ctx<'_>, _service: String, _value: String| -> rquickjs::Result<()> {
+                Err(Exception::throw_message(
+                    &ctx_inner,
+                    "keychain API is only supported on macOS",
+                ))
             },
         )?,
     )?;
 
-    let pid_write_current_user = plugin_id.to_string();
     keychain_obj.set(
         "writeGenericPasswordForCurrentUser",
         Function::new(
             ctx.clone(),
-            move |ctx_inner: Ctx<'_>, service: String, value: String| -> rquickjs::Result<()> {
-                if !cfg!(target_os = "macos") {
-                    return Err(Exception::throw_message(
-                        &ctx_inner,
-                        "keychain API is only supported on macOS",
-                    ));
-                }
-                let account = current_macos_keychain_account();
-                let args =
-                    keychain_add_generic_password_args_for_account(&service, &account, &value);
-                let redacted_account = redact_value(&account);
-                log::info!(
-                    "[plugin:{}] keychain write: service={}, account={}",
-                    pid_write_current_user,
-                    service,
-                    redacted_account
-                );
-                let output = std::process::Command::new("security")
-                    .args(&args)
-                    .output()
-                    .map_err(|e| {
-                        Exception::throw_message(
-                            &ctx_inner,
-                            &format!("keychain write failed: {}", e),
-                        )
-                    })?;
-
-                if !output.status.success() {
-                    let stderr = String::from_utf8_lossy(&output.stderr);
-                    let first_line = stderr.lines().next().unwrap_or("").trim();
-                    log::warn!(
-                        "[plugin:{}] keychain write failed: service={}, account={}, error={}",
-                        pid_write_current_user,
-                        service,
-                        redacted_account,
-                        first_line
-                    );
-                    return Err(Exception::throw_message(
-                        &ctx_inner,
-                        &format!("keychain write failed: {}", first_line),
-                    ));
-                }
-
-                log::info!(
-                    "[plugin:{}] keychain write succeeded: service={}, account={}",
-                    pid_write_current_user,
-                    service,
-                    redacted_account
-                );
-                Ok(())
+            move |ctx_inner: Ctx<'_>, _service: String, _value: String| -> rquickjs::Result<()> {
+                Err(Exception::throw_message(
+                    &ctx_inner,
+                    "keychain API is only supported on macOS",
+                ))
             },
         )?,
     )?;
 
     host.set("keychain", keychain_obj)?;
     Ok(())
+}
+
+fn inject_gh_token<'js>(
+    ctx: &Ctx<'js>,
+    host: &Object<'js>,
+    plugin_id: &str,
+) -> rquickjs::Result<()> {
+    let pid = plugin_id.to_string();
+    host.set(
+        "ghToken",
+        Function::new(
+            ctx.clone(),
+            move |ctx_inner: Ctx<'_>, account: Option<String>| -> rquickjs::Result<String> {
+                log::info!(
+                    "[plugin:{}] gh auth token account={}",
+                    pid,
+                    account.as_deref().unwrap_or("(active)")
+                );
+                run_gh_auth_token(account.as_deref())
+                    .map_err(|message| Exception::throw_message(&ctx_inner, &message))
+            },
+        )?,
+    )?;
+    Ok(())
+}
+
+fn gh_candidate_programs() -> [&'static str; 4] {
+    [
+        "gh",
+        "/usr/bin/gh",
+        "/usr/local/bin/gh",
+        "/opt/homebrew/bin/gh",
+    ]
+}
+
+fn gh_auth_token_args(account: Option<&str>) -> Vec<OsString> {
+    let mut args = vec![OsString::from("auth"), OsString::from("token")];
+    if let Some(account) = account {
+        if !account.is_empty() {
+            args.push(OsString::from("--user"));
+            args.push(OsString::from(account));
+        }
+    }
+    args
+}
+
+fn run_gh_auth_token(account: Option<&str>) -> Result<String, String> {
+    let args = gh_auth_token_args(account);
+    let mut not_found_errors = Vec::new();
+
+    for program in gh_candidate_programs() {
+        let output = match Command::new(program).args(&args).output() {
+            Ok(output) => output,
+            Err(error) if error.kind() == std::io::ErrorKind::NotFound => {
+                not_found_errors.push(format!("{}: {}", program, error));
+                continue;
+            }
+            Err(error) => return Err(format!("gh auth token failed: {}", error)),
+        };
+
+        if !output.status.success() {
+            let stderr = String::from_utf8_lossy(&output.stderr);
+            return Err(format!("gh auth token error: {}", stderr.trim()));
+        }
+
+        let token = String::from_utf8_lossy(&output.stdout).trim().to_string();
+        if token.is_empty() {
+            return Err("gh auth token returned empty token".to_string());
+        }
+
+        return Ok(token);
+    }
+
+    Err(format!(
+        "gh auth token failed: {}",
+        not_found_errors.join("; ")
+    ))
 }
 
 fn inject_sqlite<'js>(ctx: &Ctx<'js>, host: &Object<'js>) -> rquickjs::Result<()> {
@@ -2740,44 +2585,44 @@ mod tests {
         let stdout = concat!(
             "startup banner\n",
             "\u{1b}[31mplugin failed\u{1b}[0m\n",
-            "__OPENUSAGE_ENV_START__\n",
+            "__USAGELEFT_ENV_START__\n",
             "  sk-test-key-12345  \n",
-            "__OPENUSAGE_ENV_END__\n",
+            "__USAGELEFT_ENV_END__\n",
             "\u{1b}[32muser@host\u{1b}[0m\n"
         );
         let value =
-            extract_marked_value(stdout, "__OPENUSAGE_ENV_START__", "__OPENUSAGE_ENV_END__");
+            extract_marked_value(stdout, "__USAGELEFT_ENV_START__", "__USAGELEFT_ENV_END__");
         assert_eq!(value.as_deref(), Some("sk-test-key-12345"));
     }
 
     #[test]
     fn extract_marked_value_strips_inline_terminal_sequences_from_marked_value() {
         let stdout = concat!(
-            "__OPENUSAGE_ENV_START__\n",
+            "__USAGELEFT_ENV_START__\n",
             "\u{1b}[?1000l\n",
             "  sk-test-key-12345\u{1b}[?2004h\r\n",
-            "__OPENUSAGE_ENV_END__\n"
+            "__USAGELEFT_ENV_END__\n"
         );
         let value =
-            extract_marked_value(stdout, "__OPENUSAGE_ENV_START__", "__OPENUSAGE_ENV_END__");
+            extract_marked_value(stdout, "__USAGELEFT_ENV_START__", "__USAGELEFT_ENV_END__");
         assert_eq!(value.as_deref(), Some("sk-test-key-12345"));
     }
 
     #[test]
     fn extract_marked_value_returns_none_when_marked_value_is_empty() {
-        let stdout = "__OPENUSAGE_ENV_START__\n  \n__OPENUSAGE_ENV_END__\n";
+        let stdout = "__USAGELEFT_ENV_START__\n  \n__USAGELEFT_ENV_END__\n";
         let value =
-            extract_marked_value(stdout, "__OPENUSAGE_ENV_START__", "__OPENUSAGE_ENV_END__");
+            extract_marked_value(stdout, "__USAGELEFT_ENV_START__", "__USAGELEFT_ENV_END__");
         assert!(value.is_none());
     }
 
     #[test]
     fn parse_interactive_shell_env_output_does_not_fallback_to_end_marker_for_empty_value() {
-        let stdout = "__OPENUSAGE_ENV_START__\n  \n__OPENUSAGE_ENV_END__\n";
+        let stdout = "__USAGELEFT_ENV_START__\n  \n__USAGELEFT_ENV_END__\n";
         let value = parse_interactive_shell_env_output(
             stdout,
-            "__OPENUSAGE_ENV_START__",
-            "__OPENUSAGE_ENV_END__",
+            "__USAGELEFT_ENV_START__",
+            "__USAGELEFT_ENV_END__",
         );
         assert!(value.is_none());
     }
@@ -2787,8 +2632,8 @@ mod tests {
         let stdout = "\u{1b}[?1000l\n  sk-test-key-12345\u{1b}[?2004h\r\n";
         let value = parse_interactive_shell_env_output(
             stdout,
-            "__OPENUSAGE_ENV_START__",
-            "__OPENUSAGE_ENV_END__",
+            "__USAGELEFT_ENV_START__",
+            "__USAGELEFT_ENV_END__",
         );
         assert_eq!(value.as_deref(), Some("sk-test-key-12345"));
     }
@@ -2801,7 +2646,7 @@ mod tests {
             let app_data = std::env::temp_dir();
             inject_host_api(&ctx, "test", &app_data, "0.0.0").expect("inject host api");
             let globals = ctx.globals();
-            let probe_ctx: Object = globals.get("__openusage_ctx").expect("probe ctx");
+            let probe_ctx: Object = globals.get("__usageleft_ctx").expect("probe ctx");
             let host: Object = probe_ctx.get("host").expect("host");
             let crypto: Object = host.get("crypto").expect("crypto");
             let _decrypt: Function = crypto.get("decryptAes256Gcm").expect("decryptAes256Gcm");
@@ -2818,7 +2663,7 @@ mod tests {
             let app_data = std::env::temp_dir();
             inject_host_api(&ctx, "test", &app_data, "0.0.0").expect("inject host api");
             let js_expr = format!(
-                r#"__openusage_ctx.host.crypto.decryptAes256Gcm("{}", "{}")"#,
+                r#"__usageleft_ctx.host.crypto.decryptAes256Gcm("{}", "{}")"#,
                 envelope, key_b64
             );
             let decrypted: String = ctx.eval(js_expr).expect("js decrypt");
@@ -2835,7 +2680,7 @@ mod tests {
             inject_host_api(&ctx, "test", &app_data, "0.0.0").expect("inject host api");
             // Vector: `printf '%s' 'hello' | shasum -a 256`
             let result: String = ctx
-                .eval(r#"__openusage_ctx.host.crypto.sha256Hex("hello")"#)
+                .eval(r#"__usageleft_ctx.host.crypto.sha256Hex("hello")"#)
                 .expect("js sha256");
             assert_eq!(
                 result,
@@ -2843,7 +2688,7 @@ mod tests {
             );
 
             let empty: String = ctx
-                .eval(r#"__openusage_ctx.host.crypto.sha256Hex("")"#)
+                .eval(r#"__usageleft_ctx.host.crypto.sha256Hex("")"#)
                 .expect("js sha256 empty");
             assert_eq!(
                 empty,
@@ -2860,7 +2705,7 @@ mod tests {
             let app_data = std::env::temp_dir();
             inject_host_api(&ctx, "test", &app_data, "0.0.0").expect("inject host api");
             let globals = ctx.globals();
-            let probe_ctx: Object = globals.get("__openusage_ctx").expect("probe ctx");
+            let probe_ctx: Object = globals.get("__usageleft_ctx").expect("probe ctx");
             let host: Object = probe_ctx.get("host").expect("host");
             let keychain: Object = host.get("keychain").expect("keychain");
             let _read: Function = keychain
@@ -2904,7 +2749,7 @@ mod tests {
             let app_data = std::env::temp_dir();
             inject_host_api(&ctx, "test", &app_data, "0.0.0").expect("inject host api");
             let globals = ctx.globals();
-            let probe_ctx: Object = globals.get("__openusage_ctx").expect("probe ctx");
+            let probe_ctx: Object = globals.get("__usageleft_ctx").expect("probe ctx");
             let host: Object = probe_ctx.get("host").expect("host");
             let env: Object = host.get("env").expect("env");
             let get: Function = env.get("get").expect("get");
@@ -2915,7 +2760,7 @@ mod tests {
                     get.call((name.to_string(),)).expect("get whitelisted var");
                 assert_eq!(value, expected, "{name} should match host env resolver");
 
-                let js_expr = format!(r#"__openusage_ctx.host.env.get("{}")"#, name);
+                let js_expr = format!(r#"__usageleft_ctx.host.env.get("{}")"#, name);
                 let js_value: Option<String> = ctx.eval(js_expr).expect("js get whitelisted var");
                 assert_eq!(
                     js_value, expected,
@@ -2924,7 +2769,7 @@ mod tests {
             }
 
             let blocked: Option<String> = get
-                .call(("__OPENUSAGE_TEST_NOT_WHITELISTED__".to_string(),))
+                .call(("__USAGELEFT_TEST_NOT_WHITELISTED__".to_string(),))
                 .expect("get blocked var");
             assert!(
                 blocked.is_none(),
@@ -2932,7 +2777,7 @@ mod tests {
             );
 
             let js_blocked: Option<String> = ctx
-                .eval(r#"__openusage_ctx.host.env.get("__OPENUSAGE_TEST_NOT_WHITELISTED__")"#)
+                .eval(r#"__usageleft_ctx.host.env.get("__USAGELEFT_TEST_NOT_WHITELISTED__")"#)
                 .expect("js get blocked var");
             assert!(
                 js_blocked.is_none(),
@@ -2972,7 +2817,7 @@ mod tests {
             let app_data = std::env::temp_dir();
             inject_host_api(&ctx, "test", &app_data, "0.0.0").expect("inject host api");
             let globals = ctx.globals();
-            let probe_ctx: Object = globals.get("__openusage_ctx").expect("probe ctx");
+            let probe_ctx: Object = globals.get("__usageleft_ctx").expect("probe ctx");
             let host: Object = probe_ctx.get("host").expect("host");
             let env: Object = host.get("env").expect("env");
             let get: Function = env.get("get").expect("get");
@@ -2985,7 +2830,7 @@ mod tests {
             );
 
             let js_value: Option<String> = ctx
-                .eval(r#"__openusage_ctx.host.env.get("ZAI_API_KEY")"#)
+                .eval(r#"__usageleft_ctx.host.env.get("ZAI_API_KEY")"#)
                 .expect("js get");
             assert_eq!(
                 js_value.as_deref(),
@@ -2998,8 +2843,8 @@ mod tests {
     #[test]
     fn current_macos_keychain_account_prefers_explicit_user_value() {
         assert_eq!(
-            current_macos_keychain_account_from_user_env(Some("openusage-test-user".to_string())),
-            "openusage-test-user"
+            current_macos_keychain_account_from_user_env(Some("usageleft-test-user".to_string())),
+            "usageleft-test-user"
         );
     }
 
@@ -3034,7 +2879,7 @@ mod tests {
     fn keychain_find_generic_password_args_for_account_include_account_and_service() {
         let args = keychain_find_generic_password_args_for_account(
             "Claude Code-credentials",
-            "openusage-test-user",
+            "usageleft-test-user",
         );
         let rendered: Vec<String> = args
             .into_iter()
@@ -3046,7 +2891,7 @@ mod tests {
             vec![
                 "find-generic-password",
                 "-a",
-                "openusage-test-user",
+                "usageleft-test-user",
                 "-s",
                 "Claude Code-credentials",
                 "-w",
@@ -3079,7 +2924,7 @@ mod tests {
     fn keychain_add_generic_password_args_for_account_include_update_account_service_and_value() {
         let args = keychain_add_generic_password_args_for_account(
             "Claude Code-credentials",
-            "openusage-test-user",
+            "usageleft-test-user",
             "secret-value",
         );
         let rendered: Vec<String> = args
@@ -3093,13 +2938,66 @@ mod tests {
                 "add-generic-password",
                 "-U",
                 "-a",
-                "openusage-test-user",
+                "usageleft-test-user",
                 "-s",
                 "Claude Code-credentials",
                 "-w",
                 "secret-value",
             ]
         );
+    }
+
+    #[test]
+    fn ls_marker_matches_exact_or_path_segment_only() {
+        assert!(ls_marker_matches_path_value("antigravity", "antigravity"));
+        assert!(ls_marker_matches_path_value(
+            "/home/user/.config/antigravity",
+            "antigravity"
+        ));
+        assert!(!ls_marker_matches_path_value(
+            "antigravity-next",
+            "antigravity"
+        ));
+    }
+
+    #[test]
+    fn ls_extract_first_flag_supports_antigravity_single_dash_flags() {
+        let command = "/opt/antigravity/Antigravity/resources/app/extensions/antigravity/bin/language_server_linux_x64 -app_data_dir=antigravity-ide -override_ide_name=antigravity -csrf_token=csrf123 -extension_server_port=42001";
+
+        assert_eq!(
+            ls_extract_first_flag(command, &["--app_data_dir", "-app_data_dir"]),
+            Some("antigravity-ide".to_string())
+        );
+        assert_eq!(
+            ls_extract_first_flag(command, &["--ide_name", "-override_ide_name"]),
+            Some("antigravity".to_string())
+        );
+        assert_eq!(
+            ls_extract_flag(command, "-csrf_token"),
+            Some("csrf123".to_string())
+        );
+    }
+
+    #[test]
+    fn gh_auth_token_args_include_optional_user() {
+        assert_eq!(
+            gh_auth_token_args(None),
+            vec![OsString::from("auth"), OsString::from("token")]
+        );
+        assert_eq!(
+            gh_auth_token_args(Some("octocat")),
+            vec![
+                OsString::from("auth"),
+                OsString::from("token"),
+                OsString::from("--user"),
+                OsString::from("octocat"),
+            ]
+        );
+    }
+
+    #[test]
+    fn gh_candidate_programs_include_linux_path() {
+        assert!(gh_candidate_programs().contains(&"/usr/bin/gh"));
     }
 
     #[test]
@@ -3673,7 +3571,7 @@ mod tests {
 
     #[test]
     fn ccusage_path_entries_with_home_and_existing_path_preserves_order() {
-        let home = std::path::PathBuf::from("/tmp/openusage-home");
+        let home = std::path::PathBuf::from("/tmp/usageleft-home");
         let existing = std::env::join_paths([
             std::path::PathBuf::from("/usr/bin"),
             std::path::PathBuf::from("/bin"),
@@ -3732,7 +3630,7 @@ mod tests {
 
     #[test]
     fn ccusage_enriched_path_with_preserves_entries_after_join_and_split() {
-        let home = std::path::PathBuf::from("/tmp/openusage-home");
+        let home = std::path::PathBuf::from("/tmp/usageleft-home");
         let existing = std::env::join_paths([
             std::path::PathBuf::from("/usr/bin"),
             std::path::PathBuf::from("/bin"),
@@ -3760,7 +3658,7 @@ mod tests {
 
     #[test]
     fn nvm_default_bin_path_resolves_version_with_v_prefix() {
-        let home = std::env::temp_dir().join("openusage-test-nvm-v-prefix");
+        let home = std::env::temp_dir().join("usageleft-test-nvm-v-prefix");
         let alias_dir = home.join(".nvm/alias");
         std::fs::create_dir_all(&alias_dir).expect("create alias dir");
         std::fs::write(alias_dir.join("default"), "v22.16.0").expect("write alias");
@@ -3771,7 +3669,7 @@ mod tests {
 
     #[test]
     fn nvm_default_bin_path_resolves_version_without_v_prefix() {
-        let home = std::env::temp_dir().join("openusage-test-nvm-no-v-prefix");
+        let home = std::env::temp_dir().join("usageleft-test-nvm-no-v-prefix");
         let alias_dir = home.join(".nvm/alias");
         std::fs::create_dir_all(&alias_dir).expect("create alias dir");
         std::fs::write(alias_dir.join("default"), "22.16.0").expect("write alias");
@@ -3782,7 +3680,7 @@ mod tests {
 
     #[test]
     fn nvm_default_bin_path_returns_none_when_alias_missing() {
-        let home = std::env::temp_dir().join("openusage-test-nvm-no-alias");
+        let home = std::env::temp_dir().join("usageleft-test-nvm-no-alias");
         let _ = std::fs::remove_dir_all(&home);
         let result = nvm_default_bin_path(&home);
         assert_eq!(result, None);
@@ -3790,7 +3688,7 @@ mod tests {
 
     #[test]
     fn ccusage_path_entries_with_includes_nvm_default_version() {
-        let home = std::env::temp_dir().join("openusage-test-nvm-entries");
+        let home = std::env::temp_dir().join("usageleft-test-nvm-entries");
         let alias_dir = home.join(".nvm/alias");
         std::fs::create_dir_all(&alias_dir).expect("create alias dir");
         std::fs::write(alias_dir.join("default"), "22.16.0").expect("write alias");
@@ -4014,7 +3912,7 @@ Saved lockfile
         use std::os::unix::fs::PermissionsExt;
 
         let test_id = format!(
-            "openusage-ccusage-legacy-fallback-{}",
+            "usageleft-ccusage-legacy-fallback-{}",
             std::time::SystemTime::now()
                 .duration_since(std::time::UNIX_EPOCH)
                 .expect("system time")
@@ -4048,6 +3946,7 @@ esac
         let mut permissions = script.metadata().expect("script metadata").permissions();
         permissions.set_mode(0o755);
         std::fs::set_permissions(&script_path, permissions).expect("make script executable");
+        drop(script);
 
         let opts = CcusageQueryOpts {
             provider: Some("codex".to_string()),
@@ -4099,7 +3998,7 @@ esac
         }
 
         let test_id = format!(
-            "openusage-ccusage-timeout-{}",
+            "usageleft-ccusage-timeout-{}",
             std::time::SystemTime::now()
                 .duration_since(std::time::UNIX_EPOCH)
                 .expect("system time")
@@ -4126,6 +4025,7 @@ wait
         let mut permissions = script.metadata().expect("script metadata").permissions();
         permissions.set_mode(0o755);
         std::fs::set_permissions(&script_path, permissions).expect("make script executable");
+        drop(script);
 
         let opts = CcusageQueryOpts::default();
         let start = Instant::now();
