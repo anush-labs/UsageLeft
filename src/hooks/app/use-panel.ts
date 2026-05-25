@@ -1,12 +1,8 @@
 import { useCallback, useEffect, useRef, useState } from "react"
 import { invoke, isTauri } from "@tauri-apps/api/core"
 import { listen } from "@tauri-apps/api/event"
-import { getCurrentWindow, PhysicalSize, currentMonitor } from "@tauri-apps/api/window"
 import type { ActiveView } from "@/components/side-nav"
 import type { DisplayPluginState } from "@/hooks/app/use-app-plugin-views"
-
-const MAX_HEIGHT_FALLBACK_PX = 600
-const MAX_HEIGHT_FRACTION_OF_MONITOR = 0.92
 
 type UsePanelArgs = {
   activeView: ActiveView
@@ -37,8 +33,6 @@ export function usePanel({
   const containerRef = useRef<HTMLDivElement>(null)
   const scrollRef = useRef<HTMLDivElement>(null)
   const [canScrollDown, setCanScrollDown] = useState(false)
-  const [maxPanelHeightPx, setMaxPanelHeightPx] = useState<number | null>(null)
-  const maxPanelHeightPxRef = useRef<number | null>(null)
   const focusContainer = useCallback(() => {
     window.requestAnimationFrame(() => {
       containerRef.current?.focus({ preventScroll: true })
@@ -149,64 +143,6 @@ export function usePanel({
   }, [activeView, displayPlugins, setActiveView, showAbout])
 
   useEffect(() => {
-    if (!isTauri()) return
-    const container = containerRef.current
-    if (!container) return
-
-    const resizeWindow = async () => {
-      const factor = window.devicePixelRatio
-      const desiredHeightLogical = Math.max(1, container.scrollHeight)
-
-      let monitorWidth: number | null = null
-      let maxHeightPhysical: number | null = null
-      let maxHeightLogical: number | null = null
-
-      try {
-        const monitor = await currentMonitor()
-        if (monitor) {
-          monitorWidth = monitor.size.width
-          maxHeightPhysical = Math.floor(monitor.size.height * MAX_HEIGHT_FRACTION_OF_MONITOR)
-          maxHeightLogical = Math.floor(maxHeightPhysical / factor)
-        }
-      } catch {
-        // fall through to fallback
-      }
-
-      const width = monitorWidth ?? Math.ceil((window.screen?.availWidth || 1280) * factor)
-
-      if (maxHeightLogical === null) {
-        const screenAvailHeight = Number(window.screen?.availHeight) || MAX_HEIGHT_FALLBACK_PX
-        maxHeightLogical = Math.floor(screenAvailHeight * MAX_HEIGHT_FRACTION_OF_MONITOR)
-        maxHeightPhysical = Math.floor(maxHeightLogical * factor)
-      }
-
-      if (maxPanelHeightPxRef.current !== maxHeightLogical) {
-        maxPanelHeightPxRef.current = maxHeightLogical
-        setMaxPanelHeightPx(maxHeightLogical)
-      }
-
-      const desiredHeightPhysical = Math.ceil(desiredHeightLogical * factor)
-      const height = Math.ceil(Math.min(desiredHeightPhysical, maxHeightPhysical!))
-
-      try {
-        const currentWindow = getCurrentWindow()
-        await currentWindow.setSize(new PhysicalSize(width, height))
-      } catch (e) {
-        console.error("Failed to resize window:", e)
-      }
-    }
-
-    resizeWindow()
-
-    const observer = new ResizeObserver(() => {
-      resizeWindow()
-    })
-    observer.observe(container)
-
-    return () => observer.disconnect()
-  }, [activeView, displayPlugins])
-
-  useEffect(() => {
     const el = scrollRef.current
     if (!el) return
 
@@ -234,6 +170,5 @@ export function usePanel({
     containerRef,
     scrollRef,
     canScrollDown,
-    maxPanelHeightPx,
   }
 }

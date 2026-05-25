@@ -6,8 +6,6 @@ import { describe, expect, it, vi, beforeEach, afterEach } from "vitest"
 const state = vi.hoisted(() => ({
   invokeMock: vi.fn(),
   isTauriMock: vi.fn(() => false),
-  setSizeMock: vi.fn(),
-  currentMonitorMock: vi.fn(),
   startBatchMock: vi.fn(),
   savePluginSettingsMock: vi.fn(),
   loadPluginSettingsMock: vi.fn(),
@@ -171,16 +169,11 @@ vi.mock("@tauri-apps/api/path", () => ({
 }))
 
 vi.mock("@tauri-apps/api/window", () => ({
-  getCurrentWindow: () => ({ setSize: state.setSizeMock }),
+  getCurrentWindow: () => ({}),
   PhysicalSize: class {
-    width: number
-    height: number
-    constructor(width: number, height: number) {
-      this.width = width
-      this.height = height
-    }
+    constructor(_w: number, _h: number) {}
   },
-  currentMonitor: state.currentMonitorMock,
+  currentMonitor: () => Promise.resolve(null),
 }))
 
 vi.mock("@tauri-apps/api/app", () => ({
@@ -260,8 +253,6 @@ describe("App", () => {
     state.invokeMock.mockReset()
     state.isTauriMock.mockReset()
     state.isTauriMock.mockReturnValue(false)
-    state.setSizeMock.mockReset()
-    state.currentMonitorMock.mockReset()
     state.startBatchMock.mockReset()
     state.savePluginSettingsMock.mockReset()
     state.loadPluginSettingsMock.mockReset()
@@ -336,7 +327,6 @@ describe("App", () => {
         return 100
       },
     })
-    state.currentMonitorMock.mockResolvedValue({ size: { height: 1000 } })
     state.startBatchMock.mockResolvedValue(["a"])
     state.trayGetByIdMock.mockResolvedValue({
       setIcon: state.traySetIconMock.mockResolvedValue(undefined),
@@ -413,7 +403,6 @@ describe("App", () => {
     await waitFor(() => expect(state.savePluginSettingsMock).toHaveBeenCalled())
     await waitFor(() => expect(state.migrateLegacyTraySettingsMock).toHaveBeenCalled())
     expect(screen.getByText("Alpha")).toBeInTheDocument()
-    expect(state.setSizeMock).toHaveBeenCalled()
   })
 
   it("calls migrateLegacyTraySettings before loadMenubarIconStyle during bootstrap", async () => {
@@ -1227,46 +1216,6 @@ describe("App", () => {
     const targetCheckbox = checkboxes[checkboxes.length - 1]
     await userEvent.click(targetCheckbox)
     await waitFor(() => expect(state.startBatchMock).toHaveBeenCalledWith(["b"]))
-  })
-
-  it("uses fallback monitor sizing when monitor missing", async () => {
-    state.isTauriMock.mockReturnValue(true)
-    state.currentMonitorMock.mockResolvedValueOnce(null)
-    render(<App />)
-    await waitFor(() => expect(state.setSizeMock).toHaveBeenCalled())
-  })
-
-  it("resizes again via ResizeObserver callback", async () => {
-    state.isTauriMock.mockReturnValue(true)
-    const OriginalResizeObserver = globalThis.ResizeObserver
-    const observeSpy = vi.fn()
-    globalThis.ResizeObserver = class ResizeObserverImmediate {
-      private cb: ResizeObserverCallback
-      constructor(cb: ResizeObserverCallback) {
-        this.cb = cb
-      }
-      observe() {
-        observeSpy()
-        this.cb([], this as unknown as ResizeObserver)
-      }
-      unobserve() {}
-      disconnect() {}
-    } as unknown as typeof ResizeObserver
-
-    render(<App />)
-    await waitFor(() => expect(observeSpy).toHaveBeenCalled())
-    await waitFor(() => expect(state.setSizeMock).toHaveBeenCalled())
-
-    globalThis.ResizeObserver = OriginalResizeObserver
-  })
-
-  it("logs resize failures", async () => {
-    state.isTauriMock.mockReturnValue(true)
-    const errorSpy = vi.spyOn(console, "error").mockImplementation(() => {})
-    state.setSizeMock.mockRejectedValueOnce(new Error("size fail"))
-    render(<App />)
-    await waitFor(() => expect(errorSpy).toHaveBeenCalled())
-    errorSpy.mockRestore()
   })
 
   it("logs when saving plugin order fails", async () => {

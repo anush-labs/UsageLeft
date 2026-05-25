@@ -1,7 +1,6 @@
 import type { RefObject } from "react"
 import { RefreshCw } from "lucide-react"
 import { AppLogo } from "@/components/app-logo"
-import { getRelativeLuminance } from "@/lib/color"
 import type { PluginDisplayState } from "@/lib/plugin-types"
 import { clamp01 } from "@/lib/utils"
 
@@ -21,7 +20,7 @@ type DashboardMetric = {
 function getPrimaryProgressLine(plugin: PluginDisplayState) {
   const lines = plugin.data?.lines ?? []
 
-  for (const label of plugin.meta.primaryCandidates) {
+  for (const label of plugin.meta.primaryCandidates ?? []) {
     const line = lines.find(
       (candidate) => candidate.type === "progress" && candidate.label === label
     )
@@ -69,31 +68,19 @@ function getDashboardMetric(plugin: PluginDisplayState): DashboardMetric {
   }
 }
 
-function getIconForeground(brandColor: string): string {
-  return getRelativeLuminance(brandColor) > 0.7 ? "#111827" : "#ffffff"
-}
-
-function PluginIconBadge({
-  iconUrl,
-  brandColor,
-  name,
-}: {
-  iconUrl: string
-  brandColor: string
-  name: string
-}) {
+function PluginIconBadge({ iconUrl, brandColor, name }: { iconUrl: string; brandColor: string; name: string }) {
   return (
     <div
-      className="flex size-7 shrink-0 items-center justify-center rounded-lg"
+      className="flex size-10 shrink-0 items-center justify-center rounded-2xl"
       style={{ backgroundColor: brandColor }}
       aria-hidden="true"
     >
       <span
         role="img"
         aria-label={name}
-        className="size-4"
+        className="size-5"
         style={{
-          backgroundColor: getIconForeground(brandColor),
+          backgroundColor: "#ffffff",
           WebkitMaskImage: `url(${iconUrl})`,
           WebkitMaskSize: "contain",
           WebkitMaskRepeat: "no-repeat",
@@ -116,19 +103,23 @@ export function AgentDashboard({
   onOpenPlugin,
 }: AgentDashboardProps) {
   return (
-    <div className="flex h-full min-h-0 flex-col bg-[#0f111a] text-white">
-      <div className="border-b border-white/5 px-4 py-4">
+    <div className="flex h-full w-full min-h-0 flex-col text-white"
+      style={{ background: "linear-gradient(135deg, #0d0f1e 0%, #0f1130 50%, #0d0f1e 100%)" }}
+    >
+      {/* Header */}
+      <div className="shrink-0 border-b border-white/[0.06] px-6 py-4">
         <div className="flex items-center justify-between gap-3">
           <div className="flex items-center gap-3">
-            <div className="flex size-7 items-center justify-center rounded-md bg-linear-to-br from-violet-500 via-fuchsia-500 to-indigo-500 shadow-[0_0_24px_rgba(168,85,247,0.28)]">
-              <AppLogo className="size-5 rounded-[22%]" />
+            <AppLogo className="size-8 rounded-lg" />
+            <div>
+              <span className="text-base font-semibold tracking-tight">UsageLeft</span>
+              <p className="text-[11px] text-gray-500 leading-none mt-0.5">{plugins.length} active agent{plugins.length !== 1 ? "s" : ""}</p>
             </div>
-            <span className="text-base font-semibold tracking-tight">UsageLeft</span>
           </div>
           <button
             type="button"
             onClick={onRefreshAll}
-            className="flex size-7 items-center justify-center rounded-md border border-white/[0.08] bg-white/5 text-gray-400 transition-colors hover:bg-white/10 hover:text-white"
+            className="flex size-8 items-center justify-center rounded-lg border border-white/[0.08] bg-white/[0.04] text-gray-400 transition-all hover:bg-white/10 hover:text-white hover:border-white/20"
             aria-label="Refresh agents"
           >
             <RefreshCw className="size-4" />
@@ -136,17 +127,18 @@ export function AgentDashboard({
         </div>
       </div>
 
-      <div ref={scrollRef} className="min-h-0 flex-1 overflow-y-auto px-4 py-5 scrollbar-none">
-        <div className="mb-3 text-[11px] font-bold uppercase tracking-wide text-gray-500">
+      {/* Grid content */}
+      <div ref={scrollRef} className="min-h-0 flex-1 overflow-y-auto px-6 py-5 scrollbar-none">
+        <div className="mb-4 text-[10px] font-bold uppercase tracking-widest text-gray-600">
           Active agents
         </div>
 
         {plugins.length === 0 ? (
-          <div className="rounded-xl border border-white/[0.08] bg-white/[0.03] px-4 py-6 text-sm text-gray-400">
-            No agents enabled
+          <div className="rounded-xl border border-white/[0.06] bg-white/[0.02] px-6 py-10 text-center text-sm text-gray-500">
+            No agents enabled — add one in Settings
           </div>
         ) : (
-          <div className="grid grid-cols-3 gap-3">
+          <div className="grid grid-cols-2 gap-3">
             {plugins.map((plugin) => {
               const brandColor = plugin.meta.brandColor || "#a855f7"
               const metric = getDashboardMetric(plugin)
@@ -156,26 +148,49 @@ export function AgentDashboard({
                   key={plugin.meta.id}
                   type="button"
                   onClick={() => onOpenPlugin(plugin.meta.id)}
-                  className="flex min-h-28 flex-col rounded-xl border border-white/[0.08] bg-white/[0.03] p-3 text-left transition-colors hover:bg-white/[0.05]"
+                  className="group flex flex-col rounded-2xl border border-white/[0.07] p-4 text-left transition-all duration-150 hover:border-white/[0.15] hover:scale-[1.02]"
+                  style={{
+                    background: `linear-gradient(135deg, ${brandColor}0d 0%, transparent 60%)`,
+                    boxShadow: `0 0 0 1px ${brandColor}18`,
+                  }}
                   aria-label={plugin.meta.name}
                 >
-                  <PluginIconBadge
-                    iconUrl={plugin.meta.iconUrl}
-                    brandColor={brandColor}
-                    name={plugin.meta.name}
-                  />
-                  <div className="mt-3 truncate text-sm font-semibold text-white">{plugin.meta.name}</div>
-                  <div className="mt-1 font-mono text-xs text-sky-400">
-                    {metric.pctLeft === null ? "--% left" : `${metric.pctLeft}% left`}
+                  <div className="flex items-start justify-between gap-2">
+                    <PluginIconBadge
+                      iconUrl={plugin.meta.iconUrl}
+                      brandColor={brandColor}
+                      name={plugin.meta.name}
+                    />
+                    <span
+                      className="shrink-0 rounded-full px-2 py-0.5 text-[10px] font-semibold"
+                      style={{
+                        backgroundColor: `${brandColor}22`,
+                        color: brandColor,
+                      }}
+                    >
+                      {metric.pctLeft === null ? "--%" : `${metric.pctLeft}%`}
+                    </span>
                   </div>
-                  <div className="font-mono text-xs text-gray-500">{metric.timeLeftText}</div>
-                  <div className="mt-auto pt-3">
-                    <div className="h-1 w-full overflow-hidden rounded-full bg-white/10">
+
+                  <div className="mt-4 truncate text-sm font-semibold text-white group-hover:text-white/90">
+                    {plugin.meta.name}
+                  </div>
+                  <div className="mt-0.5 font-mono text-xs text-gray-500">{metric.timeLeftText}</div>
+
+                  <div className="mt-4">
+                    <div className="mb-1.5 flex items-center justify-between">
+                      <span className="text-[10px] text-gray-600">Usage</span>
+                      <span className="font-mono text-[10px] text-gray-500">
+                        {Math.round(metric.fraction * 100)}%
+                      </span>
+                    </div>
+                    <div className="h-1.5 w-full overflow-hidden rounded-full bg-white/[0.07]">
                       <div
-                        className="h-full rounded-full"
+                        className="h-full rounded-full transition-all duration-500"
                         style={{
                           width: `${metric.fraction * 100}%`,
-                          backgroundColor: brandColor,
+                          background: `linear-gradient(90deg, ${brandColor}cc, ${brandColor})`,
+                          boxShadow: `0 0 6px ${brandColor}66`,
                         }}
                       />
                     </div>

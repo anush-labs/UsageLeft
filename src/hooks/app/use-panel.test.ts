@@ -2,8 +2,6 @@ import { act, renderHook, waitFor } from "@testing-library/react"
 import { beforeEach, describe, expect, it, vi } from "vitest"
 
 const {
-  currentMonitorMock,
-  getCurrentWindowMock,
   invokeMock,
   isTauriMock,
   listenMock,
@@ -11,8 +9,6 @@ const {
   invokeMock: vi.fn(),
   isTauriMock: vi.fn(),
   listenMock: vi.fn(),
-  getCurrentWindowMock: vi.fn(),
-  currentMonitorMock: vi.fn(),
 }))
 
 vi.mock("@tauri-apps/api/core", () => ({
@@ -24,20 +20,6 @@ vi.mock("@tauri-apps/api/event", () => ({
   listen: listenMock,
 }))
 
-vi.mock("@tauri-apps/api/window", () => ({
-  getCurrentWindow: getCurrentWindowMock,
-  currentMonitor: currentMonitorMock,
-  PhysicalSize: class PhysicalSize {
-    width: number
-    height: number
-
-    constructor(width: number, height: number) {
-      this.width = width
-      this.height = height
-    }
-  },
-}))
-
 import { usePanel } from "@/hooks/app/use-panel"
 
 describe("usePanel", () => {
@@ -45,14 +27,10 @@ describe("usePanel", () => {
     invokeMock.mockReset()
     isTauriMock.mockReset()
     listenMock.mockReset()
-    getCurrentWindowMock.mockReset()
-    currentMonitorMock.mockReset()
 
     isTauriMock.mockReturnValue(true)
     invokeMock.mockResolvedValue(undefined)
     listenMock.mockResolvedValue(vi.fn())
-    currentMonitorMock.mockResolvedValue(null)
-    getCurrentWindowMock.mockReturnValue({ setSize: vi.fn().mockResolvedValue(undefined) })
   })
 
   it("handles tray show-about event", async () => {
