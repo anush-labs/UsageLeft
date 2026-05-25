@@ -1015,6 +1015,51 @@
       .agent-header { align-items: flex-start; flex-direction: column; gap: 14px; }
       .top-usage { font-size: 11px; gap: 5px; }
       .top-right .tray-icons { display: none; }
+      /* Stack footer nav columns vertically */
+      .footer-nav { gap: 32px; }
+      .footer-cta-wrap { text-align: left; }
+      /* Prevent mock windows from overflowing */
+      .window { max-width: 100%; overflow-x: auto; }
+      .tray-shot, .detail-shot { min-height: auto; }
+    }
+
+    @media (max-width: 480px) {
+      /* Hero: smaller heading and text on phones */
+      .hero h1 { font-size: clamp(48px, 14vw, 64px); }
+      .hero p { font-size: 17px; }
+      .hero, .screenshots, .feature-band { padding-left: 16px; padding-right: 16px; }
+      .screenshots { padding-top: 56px; padding-bottom: 60px; }
+      .feature-band { padding-top: 56px; padding-bottom: 60px; }
+      .site-footer { padding-top: 48px; padding-bottom: 40px; }
+
+      /* Top bar: show only the first agent on tiny screens */
+      .top-usage .agent-entry ~ .agent-entry { display: none; }
+      .top-usage .top-divider { display: none; }
+
+      /* Status dropdown: full-ish width, don't overflow right */
+      #status-dropdown-menu {
+        width: calc(100vw - 24px) !important;
+        right: auto !important;
+        left: 50% !important;
+        transform: translateX(-50%) !important;
+      }
+
+      /* Section headings */
+      .section-head h2 { font-size: clamp(30px, 9vw, 38px); }
+      .section-head { margin-bottom: 28px; }
+
+      /* Feature cards: lighter on mobile */
+      .feature { padding: 22px; min-height: auto; }
+      .feature h3 { font-size: 20px; margin-bottom: 10px; }
+      .feature p { font-size: 15px; }
+
+      /* Footer */
+      .footer-nav { flex-direction: column; gap: 28px; }
+      .footer-cta { font-size: clamp(36px, 11vw, 48px); }
+
+      /* Buttons: full-width on very small screens */
+      .hero-actions { flex-direction: column; align-items: stretch; }
+      .btn { justify-content: center; }
     }
   </style>
 </head>
