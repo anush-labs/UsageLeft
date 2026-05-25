@@ -1,12 +1,12 @@
 SHELL := /usr/bin/env bash
 .SHELLFLAGS := -eu -o pipefail -c
 
-APP := openusage
+APP := usageleft
 NPM ?= npm
 TAURI := $(NPM) exec tauri --
 TARGET_DIR := src-tauri/target/release
 BUNDLE_DIR := $(TARGET_DIR)/bundle
-DIST_LINUX := dist/linux
+DIST_DIR := dist
 LOCAL_TAURI_CONFIG := '{"bundle":{"createUpdaterArtifacts":false}}'
 
 UBUNTU_PACKAGES := libwebkit2gtk-4.1-dev build-essential curl wget file libxdo-dev libssl-dev libayatana-appindicator3-dev librsvg2-dev clang libclang-dev libc6-dev
@@ -15,7 +15,7 @@ UBUNTU_PACKAGES := libwebkit2gtk-4.1-dev build-essential curl wget file libxdo-d
 
 .PHONY: help
 help: ## Show this help.
-	@awk 'BEGIN {FS = ":.*## "; printf "\nOpenUsage Linux build targets\n\n"} /^[a-zA-Z0-9_.-]+:.*## / {printf "  \033[36m%-18s\033[0m %s\n", $$1, $$2}' $(MAKEFILE_LIST)
+	@awk 'BEGIN {FS = ":.*## "; printf "\nUsageLeft Linux build targets\n\n"} /^[a-zA-Z0-9_.-]+:.*## / {printf "  \033[36m%-18s\033[0m %s\n", $$1, $$2}' $(MAKEFILE_LIST)
 
 .PHONY: ubuntu-deps
 ubuntu-deps: ## Install Ubuntu packages required by Tauri.
@@ -84,7 +84,7 @@ web: bundle-plugins ## Build the web frontend only.
 .PHONY: clean-bundles
 clean-bundles: ## Trash previous Linux bundle output.
 	@if [ -e "$(BUNDLE_DIR)" ]; then if command -v gio >/dev/null 2>&1; then gio trash "$(BUNDLE_DIR)"; elif command -v trash >/dev/null 2>&1; then trash "$(BUNDLE_DIR)"; else echo "missing: gio or trash"; exit 1; fi; fi
-	@if [ -e "$(DIST_LINUX)" ]; then if command -v gio >/dev/null 2>&1; then gio trash "$(DIST_LINUX)"; elif command -v trash >/dev/null 2>&1; then trash "$(DIST_LINUX)"; else echo "missing: gio or trash"; exit 1; fi; fi
+	@if [ -e "$(DIST_DIR)" ]; then if command -v gio >/dev/null 2>&1; then gio trash "$(DIST_DIR)"; elif command -v trash >/dev/null 2>&1; then trash "$(DIST_DIR)"; else echo "missing: gio or trash"; exit 1; fi; fi
 
 .PHONY: clean-all
 clean-all: ## Trash all generated build output.
@@ -94,32 +94,38 @@ clean-all: ## Trash all generated build output.
 .PHONY: binary
 binary: check-tools clean-bundles ## Build a clean raw Ubuntu binary without installers.
 	$(TAURI) build --no-bundle --ci
-	mkdir -p "$(DIST_LINUX)"
-	cp "$(TARGET_DIR)/$(APP)" "$(DIST_LINUX)/$(APP)"
-	ls -lh "$(DIST_LINUX)/$(APP)"
+	mkdir -p "$(DIST_DIR)"
+	cp "$(TARGET_DIR)/$(APP)" "$(DIST_DIR)/$(APP)"
+	ls -lh "$(DIST_DIR)/$(APP)"
 
 .PHONY: package
-package: check-tools clean-bundles ## Build Ubuntu .deb and AppImage packages.
+package: build ## Build Ubuntu .deb and AppImage packages.
+
+.PHONY: build
+build: check-tools clean-bundles ## Build binary, .deb, and AppImage into dist/.
 	$(TAURI) build --bundles deb,appimage --ci --config $(LOCAL_TAURI_CONFIG)
-	mkdir -p "$(DIST_LINUX)"
-	cp "$(TARGET_DIR)/$(APP)" "$(DIST_LINUX)/$(APP)"
-	cp "$(BUNDLE_DIR)"/deb/*.deb "$(DIST_LINUX)"/
-	cp "$(BUNDLE_DIR)"/appimage/*.AppImage "$(DIST_LINUX)"/
-	ls -lh "$(DIST_LINUX)"
+	mkdir -p "$(DIST_DIR)"
+	cp "$(TARGET_DIR)/$(APP)" "$(DIST_DIR)/$(APP)"
+	cp "$(BUNDLE_DIR)"/deb/*.deb "$(DIST_DIR)"/
+	cp "$(BUNDLE_DIR)"/appimage/*.AppImage "$(DIST_DIR)"/
+	ls -lh "$(DIST_DIR)"
 
 .PHONY: release
 release: check-tools clean-bundles ## Build signed Linux release packages with updater artifacts.
 	$(NPM) run build:release -- --ci
-	mkdir -p "$(DIST_LINUX)"
-	cp "$(TARGET_DIR)/$(APP)" "$(DIST_LINUX)/$(APP)"
-	cp "$(BUNDLE_DIR)"/deb/*.deb "$(DIST_LINUX)"/
-	cp "$(BUNDLE_DIR)"/appimage/*.AppImage "$(DIST_LINUX)"/
-	ls -lh "$(DIST_LINUX)"
+	mkdir -p "$(DIST_DIR)"
+	cp "$(TARGET_DIR)/$(APP)" "$(DIST_DIR)/$(APP)"
+	cp "$(BUNDLE_DIR)"/deb/*.deb "$(DIST_DIR)"/
+	cp "$(BUNDLE_DIR)"/appimage/*.AppImage "$(DIST_DIR)"/
+	ls -lh "$(DIST_DIR)"
+
+.PHONY: install
+install: ## Install the local .deb with apt without rebuilding.
+	sudo apt install --reinstall -y ./$(DIST_DIR)/*.deb
 
 .PHONY: install-deb
-install-deb: package ## Build and install the .deb locally.
-	sudo apt install -y ./$(DIST_LINUX)/*.deb
+install-deb: install ## Alias for make install.
 
 .PHONY: run-binary
 run-binary: binary ## Build and run the raw binary.
-	./$(DIST_LINUX)/$(APP)
+	./$(DIST_DIR)/$(APP)

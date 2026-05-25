@@ -7,7 +7,7 @@ const SETTINGS_URL = "https://cli-chat-proxy.grok.com/v1/settings"
 
 const loadPlugin = async () => {
   await import("./plugin.js?test=" + Math.random())
-  return globalThis.__openusage_plugin
+  return globalThis.__usageleft_plugin
 }
 
 function writeAuth(ctx, entry) {
@@ -65,7 +65,7 @@ function mockGrokApi(ctx, data, settings) {
 
 describe("grok plugin", () => {
   beforeEach(() => {
-    delete globalThis.__openusage_plugin
+    delete globalThis.__usageleft_plugin
   })
 
   it("throws when auth file is missing", async () => {

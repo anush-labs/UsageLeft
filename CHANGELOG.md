@@ -1,5 +1,11 @@
 # Changelog
 
+## UsageLeft Starts Here
+
+UsageLeft is a fork of OpenUsage. All changes below this point represent the history of the original OpenUsage project.
+
+---
+
 ## v0.6.24
 
 ### New Features

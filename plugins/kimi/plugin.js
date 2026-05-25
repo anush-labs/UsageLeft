@@ -136,7 +136,7 @@
       headers: {
         Authorization: "Bearer " + accessToken,
         Accept: "application/json",
-        "User-Agent": "OpenUsage",
+        "User-Agent": "UsageLeft",
       },
       timeoutMs: 10000,
     })
@@ -354,5 +354,5 @@
     }
   }
 
-  globalThis.__openusage_plugin = { id: "kimi", probe }
+  globalThis.__usageleft_plugin = { id: "kimi", probe }
 })()

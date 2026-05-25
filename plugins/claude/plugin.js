@@ -889,5 +889,5 @@
     cachedUsageData = null
   }
 
-  globalThis.__openusage_plugin = { id: "claude", probe, _resetState }
+  globalThis.__usageleft_plugin = { id: "claude", probe, _resetState }
 })()

@@ -9,8 +9,8 @@ export const makeCtx = () => {
     app: {
       version: "0.0.0",
       platform: "darwin",
-      appDataDir: "/tmp/openusage-test",
-      pluginDataDir: "/tmp/openusage-test/plugin",
+      appDataDir: "/tmp/usageleft-test",
+      pluginDataDir: "/tmp/usageleft-test/plugin",
     },
     host: {
       fs: {
@@ -83,6 +83,7 @@ export const makeCtx = () => {
       ccusage: {
         query: vi.fn(() => null),
       },
+      ghToken: vi.fn(() => { throw new Error("gh not available") }),
       log: {
         trace: vi.fn(),
         debug: vi.fn(),

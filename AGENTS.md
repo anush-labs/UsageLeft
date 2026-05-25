@@ -1,4 +1,12 @@
-# OpenUsage
+# UsageLeft
+
+## App Overview
+- **What**: Tauri v2 desktop menubar/tray app (Ubuntu Linux target) that aggregates AI token/usage data from multiple providers (OpenAI, Anthropic, Claude, etc.) into a single tray icon display.
+- **Stack**: Rust (Tauri v2 backend) + React/TypeScript frontend (Vite + Bun). State via Zustand. UI via shadcn/tailwind.
+- **Platform**: Linux-first (Ubuntu, `.deb` releases). No macOS/Windows targets.
+- **Users**: 2–5 people internally. NOT a public SaaS—keep it simple.
+- **Plugins**: Each AI provider is a plugin (`plugins/<name>/plugin.json` + JS). The Rust plugin engine (`src-tauri/src/plugin_engine/`) loads and sandboxes them.
+- **Releases**: CI builds `.deb` on `ubuntu-22.04` and publishes via `tauri-action` on `v*` tags.
 
 ## Instructions
 - CRITICAL: Use simple, concise language. Avoid overtechnical jargon.
@@ -14,6 +22,14 @@
 - New functionality: small OR absolutely necessary
 - NEVER delete files, folders or other data unless explicilty approved or part of a plan
 - Before writing code, stricly follow the below research rules
+
+## Key Paths
+- `src/` — React/TS frontend
+- `src-tauri/src/` — Rust backend (Tauri commands, plugin engine, tray icon)
+- `src-tauri/src/plugin_engine/host_api.rs` — redaction lists for plugin request/response fields
+- `plugins/` — per-provider plugin directories
+- `.github/workflows/publish.yml` — release CI (Ubuntu, `.deb`)
+- `.github/workflows/ci.yml` — PR checks (lint, type-check, build, test)
 
 ## Research
 - Prefer skills if available over research.
@@ -38,3 +54,4 @@ Use below list to store and recall user notes when asked to do so.
 - Use this list when asked to remember things. Keep each list item concise.
 - Tauri IPC: JS must use camelCase (`{ batchId, pluginIds }`), Tauri auto-converts to Rust's snake_case. Never send snake_case from JS—params silently won't match.
 - tauri-action `latest.json`: Parallel matrix builds are safe—action fetches existing `latest.json`, merges platform entries, re-uploads. No `max-parallel: 1` needed.
+- Releases target Ubuntu only (`.deb`). No macOS/Windows signing secrets needed.

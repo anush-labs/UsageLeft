@@ -3,6 +3,7 @@ import userEvent from "@testing-library/user-event"
 import { describe, expect, it, vi } from "vitest"
 
 import { AboutDialog } from "@/components/about-dialog"
+import { APP_REPO_URL } from "@/lib/app-links"
 
 const openerState = vi.hoisted(() => ({
   openUrlMock: vi.fn(() => Promise.resolve()),
@@ -25,22 +26,22 @@ vi.mock("@/hooks/use-changelog", () => ({
 describe("AboutDialog", () => {
   it("renders version, links, and maintainers", () => {
     render(<AboutDialog version="1.2.3" onClose={() => {}} />)
-    expect(screen.getByText("OpenUsage")).toBeInTheDocument()
+    expect(screen.getByText("UsageLeft")).toBeInTheDocument()
     expect(screen.getByText("v1.2.3")).toBeInTheDocument()
     expect(screen.getByText("GitHub")).toBeInTheDocument()
     expect(screen.getByRole("button", { name: "validatedev" })).toBeInTheDocument()
     expect(screen.getByRole("button", { name: "davidarny" })).toBeInTheDocument()
   })
 
-  it("opens maintainer GitHub profiles on click", async () => {
+  it("opens repo for maintainer links", async () => {
     render(<AboutDialog version="1.2.3" onClose={() => {}} />)
 
     await userEvent.click(screen.getByRole("button", { name: "validatedev" }))
-    expect(openerState.openUrlMock).toHaveBeenCalledWith("https://github.com/validatedev")
+    expect(openerState.openUrlMock).toHaveBeenCalledWith(APP_REPO_URL)
 
     openerState.openUrlMock.mockClear()
     await userEvent.click(screen.getByRole("button", { name: "davidarny" }))
-    expect(openerState.openUrlMock).toHaveBeenCalledWith("https://github.com/davidarny")
+    expect(openerState.openUrlMock).toHaveBeenCalledWith(APP_REPO_URL)
   })
 
   it("closes on Escape", async () => {
@@ -61,7 +62,7 @@ describe("AboutDialog", () => {
     await userEvent.keyboard("{Escape}")
 
     expect(onClose).not.toHaveBeenCalled()
-    expect(screen.getByText("OpenUsage")).toBeInTheDocument()
+    expect(screen.getByText("UsageLeft")).toBeInTheDocument()
   })
 
   it("does not close on other keys", async () => {
@@ -80,7 +81,7 @@ describe("AboutDialog", () => {
 
     // Clicking inside the dialog should not close.
     onClose.mockClear()
-    await userEvent.click(screen.getByText("OpenUsage"))
+    await userEvent.click(screen.getByText("UsageLeft"))
     expect(onClose).not.toHaveBeenCalled()
   })
 
@@ -127,4 +128,3 @@ describe("AboutDialog", () => {
     }
   })
 })
-

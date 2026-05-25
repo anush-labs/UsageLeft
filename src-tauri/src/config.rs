@@ -3,7 +3,7 @@ use serde::Deserialize;
 use std::path::PathBuf;
 use std::sync::OnceLock;
 
-/// Proxy configuration loaded from ~/.openusage/config.json
+/// Proxy configuration loaded from ~/.usageleft/config.json
 #[derive(Debug, Clone, Deserialize)]
 pub struct ProxyConfig {
     pub enabled: bool,
@@ -29,12 +29,14 @@ static RESOLVED_PROXY: OnceLock<Option<ResolvedProxy>> = OnceLock::new();
 /// Returns the resolved proxy, or None if disabled/invalid/missing.
 /// Loaded once from disk on first call; subsequent calls are zero-cost.
 pub fn get_resolved_proxy() -> Option<&'static ResolvedProxy> {
-    RESOLVED_PROXY.get_or_init(|| load_and_resolve_proxy()).as_ref()
+    RESOLVED_PROXY
+        .get_or_init(|| load_and_resolve_proxy())
+        .as_ref()
 }
 
-/// Config file path: ~/.openusage/config.json
+/// Config file path: ~/.usageleft/config.json
 fn config_path() -> Option<PathBuf> {
-    dirs::home_dir().map(|home| home.join(".openusage").join("config.json"))
+    dirs::home_dir().map(|home| home.join(".usageleft").join("config.json"))
 }
 
 /// Loads config from disk, resolves proxy, logs result.
@@ -47,12 +49,19 @@ fn load_and_resolve_proxy() -> Option<ResolvedProxy> {
         Ok(contents) => match serde_json::from_str::<AppConfig>(&contents) {
             Ok(cfg) => cfg,
             Err(e) => {
-                log::warn!("[config] failed to parse {}: {}, using defaults", path.display(), e);
+                log::warn!(
+                    "[config] failed to parse {}: {}, using defaults",
+                    path.display(),
+                    e
+                );
                 return None;
             }
         },
         Err(_) => {
-            log::debug!("[config] no config file at {}, using defaults", path.display());
+            log::debug!(
+                "[config] no config file at {}, using defaults",
+                path.display()
+            );
             return None;
         }
     };

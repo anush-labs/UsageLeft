@@ -1,17 +1,19 @@
-# OpenUsage
+# UsageLeft
 
-Track AI coding subscription usage from the Ubuntu status indicator.
+> **Note**: We are a fork of OpenUsage but not affiliated, endorsed, or backed by OpenUsage.
 
-OpenUsage is Linux-first. It runs as a desktop app, stays available from Ubuntu Status Menus / AppIndicators, and gives quick access to agent sessions, usage, reset times, refresh actions, settings, and the full dashboard.
+UsageLeft is an Ubuntu-only app. It tracks AI coding subscription usage from the Ubuntu status indicator.
 
-![OpenUsage Screenshot](screenshot.png)
+UsageLeft runs as a desktop app, stays available from Ubuntu Status Menus / AppIndicators, and gives quick access to agent sessions, usage, reset times, refresh actions, settings, and the full dashboard.
+
+![UsageLeft Screenshot](screenshot.png)
 
 ## Quick Start
 
 Install from a release:
 
 ```bash
-sudo apt install -y ./OpenUsage_*_amd64.deb
+sudo apt install -y ./UsageLeft_*_amd64.deb
 ```
 
 Build and install from source:
@@ -32,14 +34,15 @@ Need the full build guide? See [docs/linux-build.md](docs/linux-build.md).
 
 ## What It Does
 
-OpenUsage tracks usage from AI coding tools and shows it in two places:
+UsageLeft tracks usage from AI coding tools and shows it in two places:
 
-- **Ubuntu status indicator menu.** Quick session tracker with enabled agents, usage left or used, reset timing, refresh all, settings, and quit.
-- **Dashboard window.** Full usage view with provider cards, detail pages, settings, plugin controls, and update settings.
+- **Ubuntu status indicator menu.** Quick session tracker with enabled signed-in agents, usage left or used, reset timing, refresh all, settings, and quit.
+- **Glass dashboard window.** Pictorial tray-style view with up to six agent cards, provider logos, session/token status, per-agent refresh, settings, about, and quit.
 
 Main features:
 
 - Tracks multiple AI agent sessions in one place.
+- Enables Claude, Codex, Cursor, Gemini, and GitHub Copilot by default.
 - Shows progress, badges, reset timers, and provider-specific usage lines.
 - Refreshes automatically on a configurable interval.
 - Supports manual refresh for all enabled providers.
@@ -51,24 +54,25 @@ Main features:
 
 ## Ubuntu Status Indicator
 
-OpenUsage creates an Ubuntu indicator entry. The indicator menu is the fastest way to monitor usage without opening the full dashboard.
+UsageLeft creates an Ubuntu indicator entry. The indicator menu is the fastest way to monitor usage without opening the full dashboard.
 
 The menu includes:
 
 - **Show Dashboard** opens the main window.
 - **Refresh All** refreshes enabled providers.
-- **Agent rows** show the current state for each enabled provider.
+- **Agent rows** show signed-in providers only.
 - **Settings** opens app configuration.
-- **About OpenUsage** opens app information.
 - **Quit** exits the app.
 
 Agent rows show the most useful short status available:
 
 - Percent, request count, token count, or dollar amount left.
 - Reset timing when a provider exposes it.
-- Loading state while a provider refreshes.
-- Error text when a provider check fails.
-- `No data yet` before the first refresh.
+- Hidden state for providers that are not signed in or have no usable session data.
+
+The status indicator uses a compact all-agent strip by default. It renders as a white monochrome icon for Ubuntu's dark top bar and sets the tray title to a short status string like `Codex 72% 2h left  |  Claude 35 req left`.
+
+The rich glassmorphism dashboard is opened from the indicator. Ubuntu AppIndicator menus only support native menu rows, so the native indicator menu stays simple while the dashboard provides the visual card layout.
 
 GNOME may need AppIndicator support enabled depending on the Ubuntu image. Install the Ayatana AppIndicator package:
 
@@ -82,7 +86,7 @@ sudo apt install -y libayatana-appindicator3-dev
 - [**Antigravity**](docs/providers/antigravity.md) / all models
 - [**Claude**](docs/providers/claude.md) / session, weekly, extra usage, local token usage through ccusage
 - [**Codex**](docs/providers/codex.md) / session, weekly, reviews, credits
-- [**Copilot**](docs/providers/copilot.md) / premium, chat, completions
+- [**GitHub Copilot**](docs/providers/copilot.md) / premium, chat, completions
 - [**Cursor**](docs/providers/cursor.md) / credits, total usage, auto usage, API usage, on-demand, CLI auth
 - [**Factory / Droid**](docs/providers/factory.md) / standard, premium tokens
 - [**Gemini**](docs/providers/gemini.md) / pro, flash, workspace/free/paid tier
@@ -96,32 +100,37 @@ sudo apt install -y libayatana-appindicator3-dev
 - [**Windsurf**](docs/providers/windsurf.md) / prompt credits, flex credits
 - [**Z.ai**](docs/providers/zai.md) / session, weekly, web searches
 
-Want another provider? Open an issue or add a plugin. See [Plugin API](docs/plugins/api.md).
+## Requesting New Agents
+
+Want to track usage for another provider? We welcome community contributions!
+If you want to add support for your preferred agent, you can:
+- **Open an Issue**: Create an issue requesting support for the agent.
+- **Submit a Pull Request**: Add support yourself by creating a plugin. See the [Plugin API](docs/plugins/api.md) for how to build and integrate a new provider.
 
 ## Install From Release
 
 Download the latest Ubuntu `.deb` or AppImage from:
 
-<https://github.com/robinebers/openusage/releases/latest>
+<https://github.com/anush-data-portfolio/UsageLeft/releases/latest>
 
 Install the `.deb`:
 
 ```bash
-sudo apt install -y ./OpenUsage_*_amd64.deb
+sudo apt install -y ./UsageLeft_*_amd64.deb
 ```
 
 Run the AppImage:
 
 ```bash
-chmod +x ./OpenUsage_*_amd64.AppImage
-./OpenUsage_*_amd64.AppImage
+chmod +x ./UsageLeft_*_amd64.AppImage
+./UsageLeft_*_amd64.AppImage
 ```
 
 Official release builds support app updates.
 
 ## Build From Source
 
-OpenUsage uses:
+UsageLeft uses:
 
 - Ubuntu / Linux desktop
 - Tauri v2
@@ -157,7 +166,7 @@ make binary
 Output:
 
 ```text
-dist/linux/openusage
+dist/linux/usageleft
 ```
 
 Build local Ubuntu packages:
@@ -169,9 +178,9 @@ make package
 Output:
 
 ```text
-dist/linux/openusage
-dist/linux/OpenUsage_<version>_amd64.deb
-dist/linux/OpenUsage_<version>_amd64.AppImage
+dist/linux/usageleft
+dist/linux/UsageLeft_<version>_amd64.deb
+dist/linux/UsageLeft_<version>_amd64.AppImage
 ```
 
 Install the local `.deb`:
@@ -268,19 +277,19 @@ Local packages disable updater artifacts. Only `make release` needs signing keys
 Ubuntu log path:
 
 ```text
-~/.local/share/com.sunstory.openusage/logs/OpenUsage.log
+~/.local/share/com.sunstory.usageleft/logs/UsageLeft.log
 ```
 
 See [docs/capture-logs.md](docs/capture-logs.md).
 
 ### `Could not create GBM EGL display`
 
-This is a WebKitGTK graphics startup issue seen on some Ubuntu/NVIDIA sessions. OpenUsage sets `WEBKIT_DISABLE_DMABUF_RENDERER=1` on Linux before WebKit starts.
+This is a WebKitGTK graphics startup issue seen on some Ubuntu/NVIDIA sessions. UsageLeft sets `WEBKIT_DISABLE_DMABUF_RENDERER=1` on Linux before WebKit starts.
 
 To test the workaround manually:
 
 ```bash
-WEBKIT_DISABLE_DMABUF_RENDERER=1 openusage
+WEBKIT_DISABLE_DMABUF_RENDERER=1 usageleft
 ```
 
 ## Useful Docs
@@ -306,19 +315,20 @@ Plugins are currently bundled while the plugin API matures. The goal is to make 
 
 ## Community
 
-OpenUsage grows through provider contributions, bug fixes, and practical improvements.
+UsageLeft grows through provider contributions, bug fixes, and practical improvements.
 
-<a href="https://www.star-history.com/?repos=robinebers%2Fopenusage&type=date&legend=top-left">
+<!-- ## Star History
+
+<a href="https://www.star-history.com/?repos=anush-data-portfolio%2FUsageLeft&type=date&legend=top-left">
  <picture>
-   <source media="(prefers-color-scheme: dark)" srcset="https://api.star-history.com/chart?repos=robinebers/openusage&type=date&theme=dark&legend=top-left" />
-   <source media="(prefers-color-scheme: light)" srcset="https://api.star-history.com/chart?repos=robinebers/openusage&type=date&legend=top-left" />
-   <img alt="Star History Chart" src="https://api.star-history.com/chart?repos=robinebers/openusage&type=date&legend=top-left" />
+   <source media="(prefers-color-scheme: dark)" srcset="https://api.star-history.com/chart?repos=anush-data-portfolio/UsageLeft&type=date&theme=dark&legend=top-left" />
+   <source media="(prefers-color-scheme: light)" srcset="https://api.star-history.com/chart?repos=anush-data-portfolio/UsageLeft&type=date&legend=top-left" />
+   <img alt="Star History Chart" src="https://api.star-history.com/chart?repos=anush-data-portfolio/UsageLeft&type=date&legend=top-left" />
  </picture>
-</a>
-
+</a> -->
 ## Credits
 
-Inspired by [CodexBar](https://github.com/steipete/CodexBar) by [@steipete](https://github.com/steipete).
+Inspired by CodexBar and fork of OpenUsage but for ubuntu.
 
 ## License
 

@@ -36,6 +36,6 @@ npm exec tauri -- build --bundles deb,appimage "$@"
 
 echo ""
 echo "✓ Build complete! Output:"
-ls -la src-tauri/target/release/openusage 2>/dev/null || true
+ls -la src-tauri/target/release/usageleft 2>/dev/null || true
 ls -la src-tauri/target/release/bundle/deb/*.deb 2>/dev/null || true
 ls -la src-tauri/target/release/bundle/appimage/*.AppImage 2>/dev/null || true

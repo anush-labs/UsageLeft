@@ -1,6 +1,6 @@
 # Linux Build Guide
 
-OpenUsage is built for Ubuntu with Tauri v2.
+UsageLeft is built for Ubuntu with Tauri v2.
 
 Official Tauri prerequisites: <https://v2.tauri.app/start/prerequisites/>
 
@@ -70,7 +70,7 @@ make binary
 Output:
 
 ```text
-dist/linux/openusage
+dist/linux/usageleft
 ```
 
 Build installable packages:
@@ -84,7 +84,7 @@ make package
 Output:
 
 ```text
-dist/linux/openusage
+dist/linux/usageleft
 dist/linux/*.deb
 dist/linux/*.AppImage
 ```

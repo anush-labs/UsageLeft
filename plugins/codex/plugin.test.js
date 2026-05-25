@@ -3,12 +3,12 @@ import { makeCtx } from "../test-helpers.js"
 
 const loadPlugin = async () => {
   await import("./plugin.js")
-  return globalThis.__openusage_plugin
+  return globalThis.__usageleft_plugin
 }
 
 describe("codex plugin", () => {
   beforeEach(() => {
-    delete globalThis.__openusage_plugin
+    delete globalThis.__usageleft_plugin
     vi.resetModules()
   })
 
@@ -1291,7 +1291,7 @@ describe("codex plugin", () => {
       headers: {},
       bodyText: JSON.stringify({ error: { code: "refresh_token_invalidated" } }),
     })
-    delete globalThis.__openusage_plugin
+    delete globalThis.__usageleft_plugin
     vi.resetModules()
     plugin = await loadPlugin()
     expect(() => plugin.probe(ctx)).toThrow("Token revoked")
@@ -1316,7 +1316,7 @@ describe("codex plugin", () => {
         }
       })
 
-      delete globalThis.__openusage_plugin
+      delete globalThis.__usageleft_plugin
       vi.resetModules()
       const plugin = await loadPlugin()
       const result = plugin.probe(ctx)
