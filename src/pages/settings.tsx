@@ -28,14 +28,12 @@ import {
   DISPLAY_MODE_OPTIONS,
   MENUBAR_ICON_STYLE_OPTIONS,
   RESET_TIMER_DISPLAY_OPTIONS,
-  THEME_OPTIONS,
   TIME_FORMAT_OPTIONS,
   type AutoUpdateIntervalMinutes,
   type DisplayMode,
   type GlobalShortcut,
   type MenubarIconStyle,
   type ResetTimerDisplayMode,
-  type ThemeMode,
   type TimeFormatMode,
 } from "@/lib/settings";
 import { getTimeFormatter } from "@/lib/reset-tooltip";
@@ -46,7 +44,20 @@ interface PluginConfig {
   id: string;
   name: string;
   enabled: boolean;
+  customColor?: string;
+  originalBrandColor?: string;
 }
+
+const STATUS_BAR_COLORS = [
+  // Light pastels
+  "#fecdd3", "#fed7aa", "#fef08a", "#bbf7d0",
+  "#99f6e4", "#bae6fd", "#c7d2fe", "#e9d5ff",
+  // Vibrant
+  "#f472b6", "#fb923c", "#facc15", "#4ade80",
+  "#22d3ee", "#60a5fa", "#a78bfa", "#c084fc",
+  // Neon/bright
+  "#ff6b9d", "#e879f9", "#818cf8", "#34d399",
+] as const
 
 const TRAY_PREVIEW_SIZE_PX = getTrayIconSizePx(1);
 
@@ -202,9 +213,11 @@ function MenubarIconStylePreview({
 function SortablePluginItem({
   plugin,
   onToggle,
+  onColorChange,
 }: {
   plugin: PluginConfig;
   onToggle: (id: string) => void;
+  onColorChange: (id: string, color: string | undefined) => void;
 }) {
   const {
     attributes,
@@ -220,44 +233,82 @@ function SortablePluginItem({
     transition,
   };
 
+  const activeColor = plugin.customColor ?? plugin.originalBrandColor;
+
   return (
     <div
       ref={setNodeRef}
       style={style}
-      onClick={() => onToggle(plugin.id)}
       className={cn(
-        "flex items-center gap-3 px-3 py-2 rounded-md bg-card cursor-pointer",
-        "border border-transparent",
-        isDragging && "opacity-50 border-border"
+        "rounded-xl border border-white/[0.06] bg-white/[0.03] px-3 py-2.5",
+        isDragging && "opacity-50"
       )}
     >
-      <button
-        type="button"
-        onClick={(e) => e.stopPropagation()}
-        className="touch-none cursor-grab active:cursor-grabbing text-muted-foreground hover:text-foreground transition-colors"
-        {...attributes}
-        {...listeners}
-      >
-        <GripVertical className="h-4 w-4" />
-      </button>
+      {/* Top row: drag + name + toggle */}
+      <div className="flex items-center gap-3 cursor-pointer" onClick={() => onToggle(plugin.id)}>
+        <button
+          type="button"
+          onClick={(e) => e.stopPropagation()}
+          className="touch-none cursor-grab active:cursor-grabbing text-gray-600 hover:text-gray-400 transition-colors"
+          {...attributes}
+          {...listeners}
+        >
+          <GripVertical className="h-4 w-4" />
+        </button>
 
-      <span
-        className={cn(
-          "flex-1 text-sm",
-          !plugin.enabled && "text-muted-foreground"
-        )}
-      >
-        {plugin.name}
-      </span>
-
-      {/* Wrap to stop Base UI's internal input.click() from bubbling to the row div */}
-      <span onClick={(e) => e.stopPropagation()}>
-        <Checkbox
-          key={`${plugin.id}-${plugin.enabled}`}
-          checked={plugin.enabled}
-          onCheckedChange={() => onToggle(plugin.id)}
+        {/* Active color dot */}
+        <span
+          className="size-2 shrink-0 rounded-full ring-1 ring-white/20"
+          style={{ backgroundColor: activeColor ?? "#6b7280" }}
         />
-      </span>
+
+        <span className={cn("flex-1 text-sm font-medium", !plugin.enabled && "text-gray-600")}>
+          {plugin.name}
+        </span>
+
+        <span onClick={(e) => e.stopPropagation()}>
+          <Checkbox
+            key={`${plugin.id}-${plugin.enabled}`}
+            checked={plugin.enabled}
+            onCheckedChange={() => onToggle(plugin.id)}
+          />
+        </span>
+      </div>
+
+      {/* Color swatch row */}
+      <div className="mt-2 flex flex-wrap items-center gap-1 pl-7">
+        <span className="mr-0.5 text-[10px] text-gray-600">Status bar:</span>
+        {STATUS_BAR_COLORS.map((color) => {
+          const isSelected = plugin.customColor === color;
+          return (
+            <button
+              key={color}
+              type="button"
+              aria-label={color}
+              title={color}
+              onClick={() => onColorChange(plugin.id, isSelected ? undefined : color)}
+              className="size-4 rounded-full transition-all duration-100"
+              style={{
+                backgroundColor: color,
+                outline: isSelected ? `2px solid ${color}` : "none",
+                outlineOffset: "2px",
+                opacity: isSelected ? 1 : 0.7,
+                transform: isSelected ? "scale(1.25)" : "scale(1)",
+              }}
+            />
+          );
+        })}
+        {plugin.customColor && (
+          <button
+            type="button"
+            onClick={() => onColorChange(plugin.id, undefined)}
+            className="ml-0.5 text-[10px] text-gray-600 hover:text-gray-400 transition-colors"
+            title="Reset to brand color"
+          >
+            ✕
+          </button>
+        )}
+      </div>
     </div>
   );
 }
@@ -266,10 +317,9 @@ interface SettingsPageProps {
   plugins: PluginConfig[];
   onReorder: (orderedIds: string[]) => void;
   onToggle: (id: string) => void;
+  onColorChange: (id: string, color: string | undefined) => void;
   autoUpdateInterval: AutoUpdateIntervalMinutes;
   onAutoUpdateIntervalChange: (value: AutoUpdateIntervalMinutes) => void;
-  themeMode: ThemeMode;
-  onThemeModeChange: (value: ThemeMode) => void;
   displayMode: DisplayMode;
   onDisplayModeChange: (value: DisplayMode) => void;
   resetTimerDisplayMode: ResetTimerDisplayMode;
@@ -289,10 +339,9 @@ export function SettingsPage({
   plugins,
   onReorder,
   onToggle,
+  onColorChange,
   autoUpdateInterval,
   onAutoUpdateIntervalChange,
-  themeMode,
-  onThemeModeChange,
   displayMode,
   onDisplayModeChange,
   resetTimerDisplayMode,
@@ -488,57 +537,28 @@ export function SettingsPage({
           </div>
         </div>
       </section>
-      <section>
-        <h3 className="text-lg font-semibold mb-0">App Theme</h3>
-        <p className="text-sm text-muted-foreground mb-2">
-          How it looks around here
-        </p>
-        <div className="bg-muted/50 rounded-lg p-1">
-          <div className="flex gap-1" role="radiogroup" aria-label="Theme mode">
-            {THEME_OPTIONS.map((option) => {
-              const isActive = option.value === themeMode;
-              return (
-                <Button
-                  key={option.value}
-                  type="button"
-                  role="radio"
-                  aria-checked={isActive}
-                  variant={isActive ? "default" : "outline"}
-                  size="sm"
-                  className="flex-1"
-                  onClick={() => onThemeModeChange(option.value)}
-                >
-                  {option.label}
-                </Button>
-              );
-            })}
-          </div>
-        </div>
-      </section>
       <GlobalShortcutSection
         globalShortcut={globalShortcut}
         onGlobalShortcutChange={onGlobalShortcutChange}
       />
-      <section>
-        <h3 className="text-lg font-semibold mb-0">Start on Login</h3>
-        <p className="text-sm text-muted-foreground mb-2">
-          OpenUsage starts when you sign in
-        </p>
-        <label className="flex items-center gap-2 text-sm select-none text-foreground">
+      <section className="rounded-xl border border-white/[0.06] bg-white/[0.02] px-4 py-3">
+        <h3 className="text-sm font-semibold text-white mb-0.5">Start on Login</h3>
+        <p className="text-xs text-gray-500 mb-3">UsageLeft starts when you sign in</p>
+        <label className="flex items-center gap-3 cursor-pointer select-none group">
           <Checkbox
             key={`start-on-login-${startOnLogin}`}
             checked={startOnLogin}
             onCheckedChange={(checked) => onStartOnLoginChange(checked === true)}
           />
-          Start on login
+          <span className={cn("text-sm transition-colors", startOnLogin ? "text-white" : "text-gray-400 group-hover:text-gray-300")}>
+            Start on login
+          </span>
         </label>
       </section>
       <section>
-        <h3 className="text-lg font-semibold mb-0">Plugins</h3>
-        <p className="text-sm text-muted-foreground mb-2">
-          Your AI coding lineup
-        </p>
-        <div className="bg-muted/50 rounded-lg p-1 space-y-1">
+        <h3 className="text-sm font-semibold text-white mb-0.5">Plugins</h3>
+        <p className="text-xs text-gray-500 mb-3">Your AI coding lineup — drag to reorder, pick a status bar color</p>
+        <div className="space-y-1.5">
           <DndContext
             sensors={sensors}
             collisionDetection={closestCenter}
@@ -553,6 +573,7 @@ export function SettingsPage({
                   key={plugin.id}
                   plugin={plugin}
                   onToggle={onToggle}
+                  onColorChange={onColorChange}
                 />
               ))}
             </SortableContext>

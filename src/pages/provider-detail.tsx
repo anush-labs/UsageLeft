@@ -26,19 +26,30 @@ function DetailSelect({ id, label, value, options, onChange }: DetailSelectProps
   return (
     <section className="rounded-xl border border-white/[0.08] bg-white/[0.03] px-4 py-3">
       <div className="mb-2 text-[11px] font-bold uppercase tracking-wide text-gray-500">{label}</div>
-      <select
-        id={id}
-        aria-label={label}
-        value={value}
-        onChange={(event) => onChange(event.target.value)}
-        className="w-full rounded-md border border-white/10 bg-[#111522] px-3 py-2 text-sm text-white outline-none transition-colors focus:border-violet-400"
-      >
-        {options.map((option) => (
-          <option key={option.value} value={option.value}>
-            {option.label}
-          </option>
-        ))}
-      </select>
+      <div className="relative">
+        <select
+          id={id}
+          aria-label={label}
+          value={value}
+          onChange={(event) => onChange(event.target.value)}
+          className="w-full appearance-none rounded-md border border-white/10 bg-[#0d0f1c] px-3 py-2 pr-8 text-sm text-white outline-none transition-colors focus:border-violet-400"
+          style={{ colorScheme: "dark" }}
+        >
+          {options.map((option) => (
+            <option key={option.value} value={option.value} className="bg-[#0d0f1c] text-white">
+              {option.label}
+            </option>
+          ))}
+        </select>
+        <span
+          aria-hidden
+          className="pointer-events-none absolute inset-y-0 right-2.5 flex items-center text-gray-400"
+        >
+          <svg width="12" height="12" viewBox="0 0 12 12" fill="currentColor">
+            <path d="M6 8L1 3h10L6 8z" />
+          </svg>
+        </span>
+      </div>
     </section>
   )
 }

@@ -14,8 +14,10 @@
       {
         "label": "main",
         "title": "UsageLeft",
-        "width": 1280,
-        "height": 700,
+        "width": 1000,
+        "height": 650,
+        "minWidth": 800,
+        "minHeight": 500,
         "resizable": true,
         "decorations": true,
         "transparent": false,

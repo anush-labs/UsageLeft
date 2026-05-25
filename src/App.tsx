@@ -274,6 +274,26 @@ function App() {
     [pluginStates]
   )
 
+  const handleColorChange = useCallback(
+    (pluginId: string, color: string | undefined) => {
+      const currentSettings = pluginSettingsRef.current
+      if (!currentSettings) return
+      const customColors = { ...(currentSettings.customColors ?? {}) }
+      if (color === undefined) {
+        delete customColors[pluginId]
+      } else {
+        customColors[pluginId] = color
+      }
+      const nextSettings = { ...currentSettings, customColors }
+      setPluginSettings(nextSettings)
+      scheduleTrayIconUpdate("settings", TRAY_SETTINGS_DEBOUNCE_MS)
+      void savePluginSettings(nextSettings).catch((error) => {
+        console.error("Failed to save plugin color:", error)
+      })
+    },
+    [pluginSettingsRef, scheduleTrayIconUpdate, setPluginSettings]
+  )
+
   return (
     <AppShell
       onRefreshAll={handleRefreshAll}
@@ -289,6 +309,7 @@ function App() {
         onRetryPlugin: handleRetryPlugin,
         onReorder: handleReorder,
         onToggle: handleToggle,
+        onColorChange: handleColorChange,
         onAutoUpdateIntervalChange: handleAutoUpdateIntervalChange,
         onThemeModeChange: handleThemeModeChange,
         onDisplayModeChange: handleDisplayModeChange,

@@ -1,12 +1,6 @@
 import { Settings } from "lucide-react"
-import { getRelativeLuminance } from "@/lib/color"
 import { cn } from "@/lib/utils"
 import type { NavPlugin } from "@/components/side-nav"
-
-function getIconFg(brandColor: string | undefined): string {
-  if (!brandColor) return "#ffffff"
-  return getRelativeLuminance(brandColor) > 0.7 ? "#111827" : "#ffffff"
-}
 
 type AgentSideNavProps = {
   activeView: string
@@ -26,7 +20,6 @@ export function AgentSideNav({ activeView, navPlugins, onViewChange }: AgentSide
     >
       {navPlugins.map((plugin) => {
         const active = activeView === plugin.id
-        const fg = getIconFg(plugin.brandColor)
         return (
           <button
             key={plugin.id}
@@ -58,22 +51,12 @@ export function AgentSideNav({ activeView, navPlugins, onViewChange }: AgentSide
                 style={{ backgroundColor: plugin.brandColor ?? "#a855f7" }}
               />
             )}
-            <span
+            <img
+              src={plugin.iconUrl}
+              alt=""
               aria-hidden
-              className="size-5"
-              style={{
-                backgroundColor: active ? (plugin.brandColor ?? "#a855f7") : fg,
-                opacity: active ? 1 : 0.5,
-                WebkitMaskImage: `url(${plugin.iconUrl})`,
-                WebkitMaskSize: "contain",
-                WebkitMaskRepeat: "no-repeat",
-                WebkitMaskPosition: "center",
-                maskImage: `url(${plugin.iconUrl})`,
-                maskSize: "contain",
-                maskRepeat: "no-repeat",
-                maskPosition: "center",
-                transition: "opacity 0.15s",
-              }}
+              className="size-5 object-contain"
+              style={{ opacity: active ? 1 : 0.6, transition: "opacity 0.15s" }}
             />
             {/* Tooltip */}
             <span

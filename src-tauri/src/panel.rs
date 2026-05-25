@@ -91,6 +91,12 @@ pub fn show_panel(app_handle: &AppHandle) {
         return;
     };
 
+    // Restore to configured size so users who resized it small get a proper view
+    let (conf_w, conf_h) = configured_window_size();
+    if let Err(error) = window.set_size(Size::Logical(tauri::LogicalSize::new(conf_w, conf_h))) {
+        log::warn!("Failed to resize UsageLeft window: {}", error);
+    }
+
     center_window(&window);
 
     if let Err(error) = window.show() {

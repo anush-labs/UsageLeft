@@ -18,9 +18,8 @@ You may use the UsageLeft trademarks without prior written permission in the fol
 You may NOT use the UsageLeft trademarks in the following ways without explicit prior written permission:
 
 1. **In Software Projects**: You may not use the "UsageLeft" name, logo, or variations thereof as the name of your own software project or fork.
-2. **Domain Names**: You may not register domain names containing "UsageLeft" or confusingly similar terms.
-3. **Commercial Products**: You may not use the trademarks in connection with commercial products or services in a way that implies endorsement, sponsorship, or affiliation with the official UsageLeft project or anushkrishnav.
-4. **Merchandise**: You may not sell merchandise (e.g., t-shirts, mugs) bearing the UsageLeft logo or name.
+2. **Commercial Products**: You may not use the trademarks in connection with commercial products or services in a way that implies endorsement, sponsorship, or affiliation with the official UsageLeft project or anushkrishnav.
+3. **Merchandise**: You may not sell merchandise (e.g., t-shirts, mugs) bearing the UsageLeft logo or name.
 
 ## Forking and Derivative Works
 The UsageLeft project encourages forks and derivative works! However, if you create a derivative work or fork based on the UsageLeft codebase, you must adhere to the following rules regarding branding:

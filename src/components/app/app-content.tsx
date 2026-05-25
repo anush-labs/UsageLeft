@@ -27,6 +27,7 @@ export type AppContentActionProps = {
   onRetryPlugin: (id: string) => void
   onReorder: (orderedIds: string[]) => void
   onToggle: (id: string) => void
+  onColorChange: (id: string, color: string | undefined) => void
   onAutoUpdateIntervalChange: (value: AutoUpdateIntervalMinutes) => void
   onThemeModeChange: (mode: ThemeMode) => void
   onDisplayModeChange: (mode: DisplayMode) => void
@@ -48,8 +49,9 @@ export function AppContent({
   onRetryPlugin,
   onReorder,
   onToggle,
+  onColorChange,
   onAutoUpdateIntervalChange,
-  onThemeModeChange,
+  onThemeModeChange: _onThemeModeChange,
   onDisplayModeChange,
   onResetTimerDisplayModeChange,
   onResetTimerDisplayModeToggle,
@@ -72,7 +74,6 @@ export function AppContent({
     menubarIconStyle,
     autoUpdateInterval,
     globalShortcut,
-    themeMode,
     startOnLogin,
   } = useAppPreferencesStore(
     useShallow((state) => ({
@@ -82,7 +83,6 @@ export function AppContent({
       menubarIconStyle: state.menubarIconStyle,
       autoUpdateInterval: state.autoUpdateInterval,
       globalShortcut: state.globalShortcut,
-      themeMode: state.themeMode,
       startOnLogin: state.startOnLogin,
     }))
   )
@@ -106,10 +106,9 @@ export function AppContent({
         plugins={settingsPlugins}
         onReorder={onReorder}
         onToggle={onToggle}
+        onColorChange={onColorChange}
         autoUpdateInterval={autoUpdateInterval}
         onAutoUpdateIntervalChange={onAutoUpdateIntervalChange}
-        themeMode={themeMode}
-        onThemeModeChange={onThemeModeChange}
         displayMode={displayMode}
         onDisplayModeChange={onDisplayModeChange}
         resetTimerDisplayMode={resetTimerDisplayMode}
