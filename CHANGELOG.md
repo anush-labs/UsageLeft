@@ -17,6 +17,13 @@
 - Enhance plugin color customization and UI polish
 - Add dev tooling: screenshot scripts, release-tag skill, rename utility
 - Update trademark policy and window sizing
+- Fix window: start at 400×400, enable resize and maximize
+- Fix window width: remove JS auto-resize that forced full monitor width
+- Dashboard grid: responsive 3→2→1 columns as window narrows
+- Refactor AgentSideNav and BottomBar for improved styling and layout
+- Web: improve mobile responsiveness with 480px and 640px breakpoints
+- Web: scroll to dashboard section on "Show Dashboard" click
+- Web: add animated CTA arrow on Show Dashboard dropdown item
 
 ---
 
