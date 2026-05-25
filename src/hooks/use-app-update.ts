@@ -95,8 +95,9 @@ export function useAppUpdate(): UseAppUpdateReturn {
     } catch (err) {
       inFlightRef.current.checking = false
       if (!mountedRef.current) return
-      console.error("Update check failed:", err)
-      setStatus({ status: "error", message: "Update check failed" })
+      // 404 / network errors mean no update info available — not a user-facing error
+      console.debug("Update check unavailable:", err)
+      setStatus({ status: "idle" })
     }
   }, [setStatus])
 
