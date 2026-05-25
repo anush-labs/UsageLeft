@@ -1,5 +1,5 @@
-import type { ReactNode, RefObject } from "react"
-import { Gauge, Power, RefreshCw, Settings } from "lucide-react"
+import type { RefObject } from "react"
+import { RefreshCw } from "lucide-react"
 import { AppLogo } from "@/components/app-logo"
 import { getRelativeLuminance } from "@/lib/color"
 import type { PluginDisplayState } from "@/lib/plugin-types"
@@ -10,8 +10,6 @@ type AgentDashboardProps = {
   scrollRef: RefObject<HTMLDivElement | null>
   onRefreshAll: () => void
   onOpenPlugin: (pluginId: string) => void
-  onOpenSettings: () => void
-  onQuitApp: () => void
 }
 
 type DashboardMetric = {
@@ -110,43 +108,12 @@ function PluginIconBadge({
   )
 }
 
-function BottomNavButton({
-  active = false,
-  destructive = false,
-  icon,
-  label,
-  onClick,
-}: {
-  active?: boolean
-  destructive?: boolean
-  icon: ReactNode
-  label: string
-  onClick: () => void
-}) {
-  return (
-    <button
-      type="button"
-      onClick={onClick}
-      className={[
-        "flex flex-1 flex-col items-center justify-center gap-1 rounded-lg px-2 py-2 text-xs font-medium transition-colors",
-        active ? "bg-white/10 text-white" : "text-gray-400 hover:bg-white/5 hover:text-white",
-        destructive ? "text-red-400 hover:bg-red-500/10 hover:text-red-300" : "",
-      ].join(" ")}
-      aria-pressed={active}
-    >
-      {icon}
-      <span>{label}</span>
-    </button>
-  )
-}
 
 export function AgentDashboard({
   plugins,
   scrollRef,
   onRefreshAll,
   onOpenPlugin,
-  onOpenSettings,
-  onQuitApp,
 }: AgentDashboardProps) {
   return (
     <div className="flex h-full min-h-0 flex-col bg-[#0f111a] text-white">
@@ -218,26 +185,6 @@ export function AgentDashboard({
             })}
           </div>
         )}
-      </div>
-
-      <div className="flex gap-2 border-t border-white/5 px-3 py-3">
-        <BottomNavButton
-          active
-          icon={<Gauge className="size-4" />}
-          label="Dashboard"
-          onClick={() => undefined}
-        />
-        <BottomNavButton
-          icon={<Settings className="size-4" />}
-          label="Settings"
-          onClick={onOpenSettings}
-        />
-        <BottomNavButton
-          destructive
-          icon={<Power className="size-4" />}
-          label="Quit"
-          onClick={onQuitApp}
-        />
       </div>
     </div>
   )

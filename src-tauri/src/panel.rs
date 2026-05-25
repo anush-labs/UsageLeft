@@ -91,7 +91,7 @@ pub fn show_panel(app_handle: &AppHandle) {
         return;
     };
 
-    position_panel_from_tray(app_handle);
+    center_window(&window);
 
     if let Err(error) = window.show() {
         log::warn!("Failed to show UsageLeft window: {}", error);

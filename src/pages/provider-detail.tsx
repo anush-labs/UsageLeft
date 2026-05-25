@@ -1,6 +1,7 @@
 import { useEffect, useMemo, useState } from "react"
 import { invoke } from "@tauri-apps/api/core"
 import { ProviderCard } from "@/components/provider-card"
+import { ClaudeUsageChart } from "@/components/claude-usage-chart"
 import type { MetricLine, PluginDisplayState } from "@/lib/plugin-types"
 import type { DisplayMode, ResetTimerDisplayMode, TimeFormatMode } from "@/lib/settings"
 
@@ -183,6 +184,7 @@ export function ProviderDetailPage({
       {plugin.meta.id === "antigravity" ? (
         <AntigravityModelSwitcher plugin={plugin} onRetry={onRetry} />
       ) : null}
+      <ClaudeUsageChart pluginId={plugin.meta.id} />
       <ProviderCard
         name={plugin.meta.name}
         plan={plugin.data?.plan}

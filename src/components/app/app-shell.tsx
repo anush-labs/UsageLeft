@@ -1,7 +1,8 @@
 import { invoke } from "@tauri-apps/api/core"
 import { useShallow } from "zustand/react/shallow"
 import { AppContent, type AppContentActionProps } from "@/components/app/app-content"
-import { TopNav } from "@/components/app/top-nav"
+import { AgentSideNav } from "@/components/app/agent-side-nav"
+import { BottomBar } from "@/components/app/bottom-bar"
 import { PanelFooter } from "@/components/panel-footer"
 import type { NavPlugin, PluginContextAction } from "@/components/side-nav"
 import type { DisplayPluginState } from "@/hooks/app/use-app-plugin-views"
@@ -65,6 +66,7 @@ export function AppShell({
 
   const appVersion = useAppVersion()
   const { updateStatus, triggerInstall, checkForUpdates } = useAppUpdate()
+  const quitApp = () => invoke("quit_app").catch(console.error)
 
   return (
     <div
@@ -72,28 +74,28 @@ export function AppShell({
       tabIndex={-1}
       className="flex h-screen flex-col bg-[#0a0b14] outline-none"
     >
-      <div className="relative flex min-h-0 flex-1 flex-col overflow-hidden bg-[#0a0b14]">
+      {/* Main content area */}
+      <div className="relative flex min-h-0 flex-1 overflow-hidden bg-[#0a0b14]">
         {activeView === "home" ? (
           <AgentDashboard
             plugins={displayPlugins}
             scrollRef={scrollRef}
             onRefreshAll={onRefreshAll}
             onOpenPlugin={setActiveView}
-            onOpenSettings={() => setActiveView("settings")}
-            onQuitApp={() => {
-              invoke("quit_app").catch(console.error)
-            }}
           />
         ) : (
-          <div className="flex min-h-0 flex-1 flex-col">
-            <TopNav
+          <>
+            {/* Left vertical agent/settings sidebar */}
+            <AgentSideNav
               activeView={activeView}
               navPlugins={navPlugins}
               onViewChange={setActiveView}
-              onRefreshAll={onRefreshAll}
-              onQuitApp={() => invoke("quit_app").catch(console.error)}
             />
-            <div className="relative min-h-0 flex-1 overflow-y-auto scrollbar-none px-4 py-4" ref={scrollRef}>
+            {/* Scrollable content */}
+            <div
+              className="relative min-h-0 flex-1 overflow-y-auto scrollbar-none px-4 py-4"
+              ref={scrollRef}
+            >
               <AppContent
                 {...appContentProps}
                 displayPlugins={displayPlugins}
@@ -104,19 +106,30 @@ export function AppShell({
                 className={`pointer-events-none absolute inset-x-0 bottom-0 h-10 bg-gradient-to-t from-[#0a0b14] to-transparent transition-opacity duration-200 ${canScrollDown ? "opacity-100" : "opacity-0"}`}
               />
             </div>
-            <div className="border-t border-white/[0.06] px-4 py-1.5">
-              <PanelFooter
-                version={appVersion}
-                autoUpdateNextAt={autoUpdateNextAt}
-                updateStatus={updateStatus}
-                onUpdateInstall={triggerInstall}
-                onUpdateCheck={checkForUpdates}
-                onRefreshAll={onRefreshAll}
-              />
-            </div>
-          </div>
+          </>
         )}
       </div>
+
+      {/* Version/update footer — only on non-home pages */}
+      {activeView !== "home" && (
+        <div className="shrink-0 border-t border-white/[0.05] px-4 py-1">
+          <PanelFooter
+            version={appVersion}
+            autoUpdateNextAt={autoUpdateNextAt}
+            updateStatus={updateStatus}
+            onUpdateInstall={triggerInstall}
+            onUpdateCheck={checkForUpdates}
+            onRefreshAll={onRefreshAll}
+          />
+        </div>
+      )}
+
+      {/* Global bottom navigation bar */}
+      <BottomBar
+        activeView={activeView}
+        onViewChange={setActiveView}
+        onQuitApp={quitApp}
+      />
     </div>
   )
 }
