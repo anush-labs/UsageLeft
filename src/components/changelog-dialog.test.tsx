@@ -21,6 +21,7 @@ vi.mock("@/hooks/use-changelog", () => ({
 }))
 
 import { ChangelogDialog } from "@/components/changelog-dialog"
+import { APP_REPO_URL } from "@/lib/app-links"
 
 describe("ChangelogDialog", () => {
   beforeEach(() => {
@@ -77,7 +78,7 @@ describe("ChangelogDialog", () => {
         name: "v1.2.3",
         body,
         published_at: "2024-01-02T00:00:00Z",
-        html_url: "https://github.com/robinebers/openusage/releases/tag/v1.2.3",
+        html_url: "https://github.com/anush-data-portfolio/UsageLeft/releases/tag/v1.2.3",
       },
     ]
 
@@ -94,42 +95,36 @@ describe("ChangelogDialog", () => {
     expect(screen.getByText("Heading")).toBeInTheDocument()
     expect(screen.getByText("item")).toBeInTheDocument()
 
-    // GitHub button opens the release URL.
+    // All links open the repo.
     await userEvent.click(screen.getByRole("button", { name: "GitHub" }))
-    expect(openerState.openUrlMock).toHaveBeenCalledWith(
-      "https://github.com/robinebers/openusage/releases/tag/v1.2.3",
-    )
+    expect(openerState.openUrlMock).toHaveBeenCalledWith(APP_REPO_URL)
 
     openerState.openUrlMock.mockClear()
 
     // Markdown link button.
     await userEvent.click(screen.getByRole("button", { name: "docs" }))
-    expect(openerState.openUrlMock).toHaveBeenCalledWith("https://example.com/docs")
+    expect(openerState.openUrlMock).toHaveBeenCalledWith(APP_REPO_URL)
 
     openerState.openUrlMock.mockClear()
 
     // PR, user, and commit buttons.
     await userEvent.click(screen.getByRole("button", { name: "#123" }))
-    expect(openerState.openUrlMock).toHaveBeenCalledWith(
-      "https://github.com/robinebers/openusage/pull/123",
-    )
+    expect(openerState.openUrlMock).toHaveBeenCalledWith(APP_REPO_URL)
 
     openerState.openUrlMock.mockClear()
 
     await userEvent.click(screen.getByRole("button", { name: "@user" }))
-    expect(openerState.openUrlMock).toHaveBeenCalledWith("https://github.com/user")
+    expect(openerState.openUrlMock).toHaveBeenCalledWith(APP_REPO_URL)
 
     openerState.openUrlMock.mockClear()
 
     await userEvent.click(screen.getByRole("button", { name: "abcdef1" }))
-    expect(openerState.openUrlMock).toHaveBeenCalledWith(
-      "https://github.com/robinebers/openusage/commit/abcdef1",
-    )
+    expect(openerState.openUrlMock).toHaveBeenCalledWith(APP_REPO_URL)
 
     openerState.openUrlMock.mockClear()
 
     await userEvent.click(screen.getByRole("button", { name: "https://example.com/plain" }))
-    expect(openerState.openUrlMock).toHaveBeenCalledWith("https://example.com/plain")
+    expect(openerState.openUrlMock).toHaveBeenCalledWith(APP_REPO_URL)
   })
 
   it("handles null body without crashing", () => {
@@ -140,7 +135,7 @@ describe("ChangelogDialog", () => {
         name: "v1.0.0",
         body: null as any,
         published_at: "2024-01-02T00:00:00Z",
-        html_url: "https://github.com/robinebers/openusage/releases/tag/v1.0.0",
+        html_url: "https://github.com/anush-data-portfolio/UsageLeft/releases/tag/v1.0.0",
       },
     ]
 
@@ -164,7 +159,7 @@ describe("ChangelogDialog", () => {
         name: "v1.0.1",
         body: "body",
         published_at: null,
-        html_url: "https://github.com/robinebers/openusage/releases/tag/v1.0.1",
+        html_url: "https://github.com/anush-data-portfolio/UsageLeft/releases/tag/v1.0.1",
       },
     ]
 
@@ -188,7 +183,7 @@ describe("ChangelogDialog", () => {
         name: "v1.0.0",
         body: "body",
         published_at: "2024-01-02T00:00:00Z",
-        html_url: "https://github.com/robinebers/openusage/releases/tag/v1.0.0",
+        html_url: "https://github.com/anush-data-portfolio/UsageLeft/releases/tag/v1.0.0",
       },
       {
         id: 2,
@@ -196,7 +191,7 @@ describe("ChangelogDialog", () => {
         name: "v0.9.0",
         body: "older",
         published_at: "2024-01-01T00:00:00Z",
-        html_url: "https://github.com/robinebers/openusage/releases/tag/v0.9.0",
+        html_url: "https://github.com/anush-data-portfolio/UsageLeft/releases/tag/v0.9.0",
       },
     ]
 
@@ -211,9 +206,7 @@ describe("ChangelogDialog", () => {
     const fullChangelogButton = screen.getByRole("button", { name: "full changelog" })
     await userEvent.click(fullChangelogButton)
 
-    expect(openerState.openUrlMock).toHaveBeenCalledWith(
-      "https://github.com/robinebers/openusage/releases",
-    )
+    expect(openerState.openUrlMock).toHaveBeenCalledWith(APP_REPO_URL)
   })
 
   it("renders fallback when no current release is found", async () => {
@@ -224,7 +217,7 @@ describe("ChangelogDialog", () => {
         name: "v0.1.0",
         body: "old",
         published_at: "2023-01-01T00:00:00Z",
-        html_url: "https://github.com/robinebers/openusage/releases/tag/v0.1.0",
+        html_url: "https://github.com/anush-data-portfolio/UsageLeft/releases/tag/v0.1.0",
       },
     ]
 
@@ -244,9 +237,7 @@ describe("ChangelogDialog", () => {
       screen.getByRole("button", { name: "View all releases on GitHub" }),
     )
 
-    expect(openerState.openUrlMock).toHaveBeenCalledWith(
-      "https://github.com/robinebers/openusage/releases",
-    )
+    expect(openerState.openUrlMock).toHaveBeenCalledWith(APP_REPO_URL)
   })
 
   it("invokes navigation callbacks and closes on Escape", async () => {
@@ -260,7 +251,7 @@ describe("ChangelogDialog", () => {
         name: "v1.0.0",
         body: "body",
         published_at: "2024-01-02T00:00:00Z",
-        html_url: "https://github.com/robinebers/openusage/releases/tag/v1.0.0",
+        html_url: "https://github.com/anush-data-portfolio/UsageLeft/releases/tag/v1.0.0",
       },
     ]
 
@@ -281,4 +272,3 @@ describe("ChangelogDialog", () => {
     expect(onClose).toHaveBeenCalledTimes(1)
   })
 })
-

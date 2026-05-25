@@ -1,12 +1,16 @@
 import { useCallback } from "react"
 import {
   saveDisplayMode,
+  saveMenubarAgentCount,
   saveMenubarIconStyle,
+  saveMenubarLogoColor,
   saveResetTimerDisplayMode,
   saveThemeMode,
   saveTimeFormatMode,
   type DisplayMode,
+  type MenubarAgentCount,
   type MenubarIconStyle,
+  type MenubarLogoColor,
   type ResetTimerDisplayMode,
   type ThemeMode,
   type TimeFormatMode,
@@ -21,6 +25,8 @@ type UseSettingsDisplayActionsArgs = {
   setResetTimerDisplayMode: (value: ResetTimerDisplayMode) => void
   setTimeFormatMode: (value: TimeFormatMode) => void
   setMenubarIconStyle: (value: MenubarIconStyle) => void
+  setMenubarAgentCount: (value: MenubarAgentCount) => void
+  setMenubarLogoColor: (value: MenubarLogoColor) => void
   scheduleTrayIconUpdate: ScheduleTrayIconUpdate
 }
 
@@ -31,6 +37,8 @@ export function useSettingsDisplayActions({
   setResetTimerDisplayMode,
   setTimeFormatMode,
   setMenubarIconStyle,
+  setMenubarAgentCount,
+  setMenubarLogoColor,
   scheduleTrayIconUpdate,
 }: UseSettingsDisplayActionsArgs) {
   const handleThemeModeChange = useCallback((mode: ThemeMode) => {
@@ -75,6 +83,22 @@ export function useSettingsDisplayActions({
     })
   }, [scheduleTrayIconUpdate, setMenubarIconStyle])
 
+  const handleMenubarAgentCountChange = useCallback((count: MenubarAgentCount) => {
+    setMenubarAgentCount(count)
+    scheduleTrayIconUpdate("settings", 0)
+    void saveMenubarAgentCount(count).catch((error) => {
+      console.error("Failed to save menubar agent count:", error)
+    })
+  }, [scheduleTrayIconUpdate, setMenubarAgentCount])
+
+  const handleMenubarLogoColorChange = useCallback((color: MenubarLogoColor) => {
+    setMenubarLogoColor(color)
+    scheduleTrayIconUpdate("settings", 0)
+    void saveMenubarLogoColor(color).catch((error) => {
+      console.error("Failed to save menubar logo color:", error)
+    })
+  }, [scheduleTrayIconUpdate, setMenubarLogoColor])
+
   return {
     handleThemeModeChange,
     handleDisplayModeChange,
@@ -82,5 +106,7 @@ export function useSettingsDisplayActions({
     handleResetTimerDisplayModeToggle,
     handleTimeFormatModeChange,
     handleMenubarIconStyleChange,
+    handleMenubarAgentCountChange,
+    handleMenubarLogoColorChange,
   }
 }

@@ -31,7 +31,7 @@ describe("tray-bars-icon", () => {
       providerIconUrl: "data:image/svg+xml;base64,ABC",
     })
     expect(svg).toContain("<image ")
-    expect(svg).not.toContain("<rect ")
+    expect(svg).toContain('mask="url(#provider-mask)"')
     expect(svg).not.toContain("<path ")
   })
 
@@ -77,7 +77,23 @@ describe("tray-bars-icon", () => {
     })
     expect(svg).toContain('stroke-dasharray="')
     expect(svg).toContain("<image ")
-    expect(svg).not.toContain("<rect ")
+    expect(svg).toContain('mask="url(#donut-provider-mask)"')
+    expect(svg).not.toContain("<path ")
+  })
+
+  it("style=agents renders compact labels and monochrome bars", () => {
+    const svg = makeTrayBarsSvg({
+      bars: [
+        { id: "codex", label: "Codex", fraction: 0.72 },
+        { id: "claude", label: "Claude", fraction: 0.35 },
+      ],
+      sizePx: 36,
+      style: "agents",
+      foregroundColor: "#ffffff",
+    })
+    expect(svg).toContain(">CO</text>")
+    expect(svg).toContain(">CL</text>")
+    expect(svg).toContain('fill="#ffffff"')
   })
 
   it("style=donut falls back to center glyph when provider icon is missing", () => {
@@ -133,6 +149,24 @@ describe("tray-bars-icon", () => {
       percentText: "70%",
     })
     expect(svg).toContain(">70%</text>")
+  })
+
+  it("style=text renders only colored text", () => {
+    const svg = makeTrayBarsSvg({
+      bars: [],
+      sizePx: 36,
+      style: "text",
+      percentText: "Alpha 50% 4h",
+      foregroundColor: "#c4b5fd",
+    })
+
+    expect(svg).toContain(">Alpha 50% 4h</text>")
+    expect(svg).toContain("fill=\"#c4b5fd\"")
+    expect(svg).not.toContain("<circle ")
+    expect(svg).not.toContain("<image ")
+    const viewBox = svg.match(/viewBox="0 0 (\d+) (\d+)"/)
+    expect(viewBox).toBeTruthy()
+    expect(Number(viewBox?.[1])).toBeGreaterThan(36)
   })
 
   it("renderTrayBarsIcon rasterizes SVG to an Image using canvas", async () => {

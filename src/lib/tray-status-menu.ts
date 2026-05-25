@@ -1,7 +1,7 @@
 import { invoke } from "@tauri-apps/api/core"
 import type { MetricLine, PluginMeta, PluginOutput, ProgressFormat } from "@/lib/plugin-types"
 import { formatResetRelativeLabel } from "@/lib/reset-tooltip"
-import { getEnabledPluginIds, type DisplayMode, type PluginSettings } from "@/lib/settings"
+import { getEnabledPluginIds, type DisplayMode, type PluginSettings, type ResetTimerDisplayMode } from "@/lib/settings"
 import { clamp01, formatCountNumber, formatFixedPrecisionNumber } from "@/lib/utils"
 
 type PluginState = {
@@ -19,6 +19,8 @@ export type TrayStatusMenuAgent = {
   summary: string
   detail?: string
   status?: string
+  resetsAtMs?: number
+  color?: string
 }
 
 export type TrayStatusMenuPayload = {
@@ -76,8 +78,9 @@ function buildAgentStatus(args: {
   state: PluginState | undefined
   displayMode: DisplayMode
   nowMs: number
+  color: string
 }): TrayStatusMenuAgent | null {
-  const { meta, state, displayMode, nowMs } = args
+  const { meta, state, displayMode, nowMs, color } = args
   if (!state || state.error) return null
 
   const data = state?.data ?? null
@@ -89,11 +92,12 @@ function buildAgentStatus(args: {
     const detail = progress.resetsAt
       ? formatResetRelativeLabel(nowMs, progress.resetsAt) ?? undefined
       : undefined
-    return { id: meta.id, name: meta.name, summary, detail }
+    const resetsAtMs = progress.resetsAt ? new Date(progress.resetsAt).getTime() : undefined
+    return { id: meta.id, name: meta.name, summary, detail, resetsAtMs, color }
   }
 
   const statusText = findStatusText(data)
-  if (statusText) return { id: meta.id, name: meta.name, summary: statusText }
+  if (statusText) return { id: meta.id, name: meta.name, summary: statusText, color }
 
   return null
 }
@@ -110,13 +114,6 @@ function compactAgentName(name: string): string {
   return `${trimmed.slice(0, 11)}...`
 }
 
-function compactSummary(summary: string): string {
-  return summary
-    .replace(/\brequests\b/g, "req")
-    .replace(/\btokens\b/g, "tok")
-    .replace(/\bleft\b/g, "left")
-    .replace(/\bused\b/g, "used")
-}
 
 export function buildTrayStatusMenuPayload(args: {
   pluginsMeta: PluginMeta[]
@@ -132,24 +129,115 @@ export function buildTrayStatusMenuPayload(args: {
   const agents = getEnabledPluginIds(pluginSettings)
     .map((id) => metaById.get(id))
     .filter((meta): meta is PluginMeta => Boolean(meta))
-    .map((meta) => buildAgentStatus({
-      meta,
-      state: pluginStates[meta.id],
-      displayMode,
-      nowMs,
-    }))
+    .map((meta) => {
+      const color = pluginSettings.customColors?.[meta.id] ?? meta.brandColor ?? "#ffffff"
+      return buildAgentStatus({
+        meta,
+        state: pluginStates[meta.id],
+        displayMode,
+        nowMs,
+        color
+      })
+    })
     .filter((agent): agent is TrayStatusMenuAgent => Boolean(agent))
 
   return { agents }
 }
 
-export function buildTrayIndicatorTitle(payload: TrayStatusMenuPayload): string {
-  const parts = payload.agents.map((agent) => (
-    `${compactAgentName(agent.name)} ${compactSummary(agent.summary)}`
-  ))
-  const title = parts.join(" | ")
-  if (title.length <= 120) return title
-  return `${title.slice(0, 117)}...`
+function formatCompactTimeLeft(nowMs: number, resetsAtMs: number): string {
+  const deltaMs = resetsAtMs - nowMs
+  if (deltaMs <= 0) return "0m"
+  const hours = Math.floor(deltaMs / 3_600_000)
+  if (hours >= 1) return `${hours}h`
+  const minutes = Math.max(1, Math.ceil(deltaMs / 60_000))
+  return `${minutes}m`
+}
+
+function formatAbsoluteResetTime(resetsAtMs: number): string {
+  const d = new Date(resetsAtMs)
+  const h = d.getHours()
+  const m = d.getMinutes()
+  const ampm = h < 12 ? "a" : "p"
+  const h12 = h % 12 === 0 ? 12 : h % 12
+  if (m === 0) return `${h12}${ampm}`
+  const mm = String(m).padStart(2, "0")
+  return `${h12}:${mm}${ampm}`
+}
+
+export function buildTrayIndicatorTextSegments(
+  payload: TrayStatusMenuPayload,
+  maxAgents = payload.agents.length,
+  resetTimerDisplayMode: ResetTimerDisplayMode = "relative",
+  omitName = false,
+  targetAgentId?: string | null,
+): { text: string; color: string }[] {
+  const nowMs = Date.now()
+  let agents = payload.agents
+  if (targetAgentId) {
+    agents = agents.filter(a => a.id === targetAgentId)
+  }
+  
+  const segments: { text: string; color: string }[] = []
+  
+  const filtered = agents.slice(0, maxAgents)
+  filtered.forEach((agent, i) => {
+    const name = compactAgentName(agent.name)
+    const pct = agent.summary.replace(/\s+(left|used)$/, "")
+    let timeStr = ""
+    if (agent.resetsAtMs && agent.resetsAtMs > nowMs) {
+      timeStr = resetTimerDisplayMode === "absolute"
+        ? formatAbsoluteResetTime(agent.resetsAtMs)
+        : formatCompactTimeLeft(nowMs, agent.resetsAtMs)
+    }
+    
+    const color = agent.color || "#ffffff"
+    const metricStr = timeStr ? `${pct} ${timeStr}` : pct
+    
+    if (omitName) {
+      segments.push({ text: metricStr, color })
+    } else {
+      segments.push({ text: `${name} `, color: "white" })
+      segments.push({ text: metricStr, color })
+    }
+    
+    if (i < filtered.length - 1) {
+      segments.push({ text: "  |  ", color: "white" })
+    }
+  })
+  
+  return segments
+}
+
+export function buildTrayIndicatorTitle(
+  payload: TrayStatusMenuPayload,
+  maxAgents = payload.agents.length,
+  resetTimerDisplayMode: ResetTimerDisplayMode = "relative",
+  omitName = false,
+  targetAgentId?: string | null,
+): string {
+  const nowMs = Date.now()
+  let agents = payload.agents
+  if (targetAgentId) {
+    agents = agents.filter(a => a.id === targetAgentId)
+  }
+  const parts = agents.slice(0, maxAgents).map((agent) => {
+    const name = compactAgentName(agent.name)
+    const pct = agent.summary.replace(/\s+(left|used)$/, "")
+    let timeStr = ""
+    if (agent.resetsAtMs && agent.resetsAtMs > nowMs) {
+      timeStr = resetTimerDisplayMode === "absolute"
+        ? formatAbsoluteResetTime(agent.resetsAtMs)
+        : formatCompactTimeLeft(nowMs, agent.resetsAtMs)
+    }
+    
+    if (omitName) {
+      return timeStr ? `${pct} ${timeStr}` : pct
+    }
+    return timeStr ? `${name} ${pct} ${timeStr}` : `${name} ${pct}`
+  })
+  const title = parts.join("  |  ")
+  if (title.length <= 250) return title
+  return `${title.slice(0, 247)}...`
 }
 
 export async function updateTrayStatusMenu(payload: TrayStatusMenuPayload): Promise<void> {

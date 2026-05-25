@@ -1,3 +1,4 @@
+
 import { ProviderCard } from "@/components/provider-card"
 import type { PluginDisplayState } from "@/lib/plugin-types"
 import type { DisplayMode, ResetTimerDisplayMode, TimeFormatMode } from "@/lib/settings"

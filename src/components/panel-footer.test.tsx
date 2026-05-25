@@ -1,9 +1,10 @@
 import { render, screen } from "@testing-library/react"
 import userEvent from "@testing-library/user-event"
-import { useState } from "react"
 import { describe, expect, it, vi } from "vitest"
 import { PanelFooter } from "@/components/panel-footer"
 import type { UpdateStatus } from "@/hooks/use-app-update"
+import { openUrl } from "@tauri-apps/plugin-opener"
+import { APP_REPO_URL } from "@/lib/app-links"
 
 vi.mock("@tauri-apps/plugin-opener", () => ({
   openUrl: vi.fn(() => Promise.resolve()),
@@ -11,7 +12,7 @@ vi.mock("@tauri-apps/plugin-opener", () => ({
 
 const idle: UpdateStatus = { status: "idle" }
 const noop = () => {}
-const footerProps = { showAbout: false, onShowAbout: noop, onCloseAbout: noop, onUpdateCheck: noop }
+const footerProps = { onUpdateCheck: noop }
 
 describe("PanelFooter", () => {
   it("shows countdown in minutes when >= 60 seconds", () => {
@@ -124,9 +125,6 @@ describe("PanelFooter", () => {
         autoUpdateNextAt={null}
         updateStatus={{ status: "error", message: "Update check failed" }}
         onUpdateInstall={noop}
-        showAbout={false}
-        onShowAbout={noop}
-        onCloseAbout={noop}
         onUpdateCheck={onUpdateCheck}
       />
     )
@@ -164,29 +162,21 @@ describe("PanelFooter", () => {
     expect(screen.getByText("Installing...")).toBeTruthy()
   })
 
-  it("opens About dialog when clicking version in idle state", async () => {
+  it("opens repo when clicking version in idle state", async () => {
     function Harness() {
-      const [showAbout, setShowAbout] = useState(false)
       return (
         <PanelFooter
           version="0.0.0"
           autoUpdateNextAt={null}
           updateStatus={idle}
           onUpdateInstall={noop}
-          showAbout={showAbout}
-          onShowAbout={() => setShowAbout(true)}
-          onCloseAbout={() => setShowAbout(false)}
           onUpdateCheck={noop}
         />
       )
     }
 
     render(<Harness />)
-    await userEvent.click(screen.getByRole("button", { name: /OpenUsage/ }))
-    expect(screen.getByText("Open source on")).toBeInTheDocument()
-
-    // Close via Escape to exercise AboutDialog onClose path.
-    await userEvent.keyboard("{Escape}")
-    expect(screen.queryByText("Open source on")).not.toBeInTheDocument()
+    await userEvent.click(screen.getByRole("button", { name: /UsageLeft/ }))
+    expect(openUrl).toHaveBeenCalledWith(APP_REPO_URL)
   })
 })

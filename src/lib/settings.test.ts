@@ -3,6 +3,7 @@ import {
   DEFAULT_AUTO_UPDATE_INTERVAL,
   DEFAULT_DISPLAY_MODE,
   DEFAULT_GLOBAL_SHORTCUT,
+  DEFAULT_MENUBAR_AGENT_COUNT,
   DEFAULT_MENUBAR_ICON_STYLE,
   DEFAULT_PLUGIN_SETTINGS,
   DEFAULT_RESET_TIMER_DISPLAY_MODE,
@@ -14,6 +15,7 @@ import {
   loadAutoUpdateInterval,
   loadDisplayMode,
   loadGlobalShortcut,
+  loadMenubarAgentCount,
   loadMenubarIconStyle,
   loadPluginSettings,
   loadResetTimerDisplayMode,
@@ -25,6 +27,7 @@ import {
   saveAutoUpdateInterval,
   saveDisplayMode,
   saveGlobalShortcut,
+  saveMenubarAgentCount,
   saveMenubarIconStyle,
   savePluginSettings,
   saveResetTimerDisplayMode,
@@ -102,7 +105,7 @@ describe("settings", () => {
     ]
     const result = normalizePluginSettings({ order: [], disabled: [] }, plugins)
     expect(result.order).toEqual(["claude", "copilot", "windsurf"])
-    expect(result.disabled).toEqual(["copilot", "windsurf"])
+    expect(result.disabled).toEqual(["windsurf"])
   })
 
   it("compares settings equality", () => {
@@ -281,6 +284,25 @@ describe("settings", () => {
   it("falls back to default for invalid menubar icon style", async () => {
     storeState.set("menubarIconStyle", "invalid")
     await expect(loadMenubarIconStyle()).resolves.toBe(DEFAULT_MENUBAR_ICON_STYLE)
+  })
+
+  it("loads default menubar agent count when missing", async () => {
+    await expect(loadMenubarAgentCount()).resolves.toBe(DEFAULT_MENUBAR_AGENT_COUNT)
+  })
+
+  it("loads stored menubar agent count", async () => {
+    storeState.set("menubarAgentCount", 6)
+    await expect(loadMenubarAgentCount()).resolves.toBe(6)
+  })
+
+  it("saves menubar agent count", async () => {
+    await saveMenubarAgentCount(5)
+    await expect(loadMenubarAgentCount()).resolves.toBe(5)
+  })
+
+  it("falls back to default for invalid menubar agent count", async () => {
+    storeState.set("menubarAgentCount", 9)
+    await expect(loadMenubarAgentCount()).resolves.toBe(DEFAULT_MENUBAR_AGENT_COUNT)
   })
 
   it("skips legacy tray migration when keys are absent", async () => {

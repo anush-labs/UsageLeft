@@ -55,9 +55,13 @@ function App() {
     setDisplayMode,
     menubarIconStyle,
     setMenubarIconStyle,
+    menubarAgentCount,
+    setMenubarAgentCount,
     resetTimerDisplayMode,
     setResetTimerDisplayMode,
     setTimeFormatMode,
+    menubarLogoColor,
+    setMenubarLogoColor,
     setGlobalShortcut,
     setStartOnLogin,
   } = useAppPreferencesStore(
@@ -70,6 +74,10 @@ function App() {
       setDisplayMode: state.setDisplayMode,
       menubarIconStyle: state.menubarIconStyle,
       setMenubarIconStyle: state.setMenubarIconStyle,
+      menubarAgentCount: state.menubarAgentCount,
+      setMenubarAgentCount: state.setMenubarAgentCount,
+      menubarLogoColor: state.menubarLogoColor,
+      setMenubarLogoColor: state.setMenubarLogoColor,
       resetTimerDisplayMode: state.resetTimerDisplayMode,
       setResetTimerDisplayMode: state.setResetTimerDisplayMode,
       setTimeFormatMode: state.setTimeFormatMode,
@@ -104,6 +112,9 @@ function App() {
     pluginStates,
     displayMode,
     menubarIconStyle,
+    menubarAgentCount,
+    menubarLogoColor,
+    resetTimerDisplayMode,
     activeView,
   })
 
@@ -125,6 +136,8 @@ function App() {
     setThemeMode,
     setDisplayMode,
     setMenubarIconStyle,
+    setMenubarAgentCount,
+    setMenubarLogoColor,
     setResetTimerDisplayMode,
     setTimeFormatMode,
     setGlobalShortcut,
@@ -150,6 +163,8 @@ function App() {
     setResetTimerDisplayMode,
     setTimeFormatMode,
     setMenubarIconStyle,
+    setMenubarAgentCount,
+    setMenubarLogoColor,
     scheduleTrayIconUpdate,
   })
 

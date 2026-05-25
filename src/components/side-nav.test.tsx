@@ -5,6 +5,7 @@ import { openUrl } from "@tauri-apps/plugin-opener"
 import { invoke } from "@tauri-apps/api/core"
 
 import { SideNav } from "@/components/side-nav"
+import { APP_REPO_URL } from "@/lib/app-links"
 
 const darkModeState = vi.hoisted(() => ({
   useDarkModeMock: vi.fn(() => false),
@@ -81,13 +82,13 @@ describe("SideNav", () => {
     expect(p2Style).toContain("rgb(255, 255, 255)")
   })
 
-  it("opens the issues page and hides the panel from Help", async () => {
+  it("opens the repo and hides the panel from Help", async () => {
     const onViewChange = vi.fn()
     render(<SideNav activeView="home" onViewChange={onViewChange} plugins={[]} />)
 
     await userEvent.click(screen.getByRole("button", { name: "Help" }))
 
-    expect(openUrl).toHaveBeenCalledWith("https://github.com/robinebers/openusage/issues")
+    expect(openUrl).toHaveBeenCalledWith(APP_REPO_URL)
     expect(invoke).toHaveBeenCalledWith("hide_panel")
   })
 })

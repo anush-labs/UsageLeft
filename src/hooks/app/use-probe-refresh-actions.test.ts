@@ -46,7 +46,7 @@ describe("useProbeRefreshActions", () => {
     expect(manualRefreshIdsRef.current.has("codex")).toBe(true)
   })
 
-  it("filters out ineligible plugins for refresh-all", () => {
+  it("refresh-all forces every enabled plugin", () => {
     const nowSpy = vi.spyOn(Date, "now").mockReturnValue(1_000_000)
     const startBatch = vi.fn().mockResolvedValue(undefined)
     const setLoadingForPlugins = vi.fn()
@@ -73,8 +73,8 @@ describe("useProbeRefreshActions", () => {
       result.current.handleRefreshAll()
     })
 
-    expect(setLoadingForPlugins).toHaveBeenCalledWith(["c"])
-    expect(startBatch).toHaveBeenCalledWith(["c"])
+    expect(setLoadingForPlugins).toHaveBeenCalledWith(["a", "b", "c"])
+    expect(startBatch).toHaveBeenCalledWith(["a", "b", "c"])
     nowSpy.mockRestore()
   })
 

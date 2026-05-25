@@ -15,7 +15,10 @@ import {
   verticalListSortingStrategy,
 } from "@dnd-kit/sortable";
 import { CSS } from "@dnd-kit/utilities";
-import { GripVertical } from "lucide-react";
+import { Check, Copy, ExternalLink, GripVertical } from "lucide-react";
+import { useEffect, useState } from "react";
+import { invoke, isTauri } from "@tauri-apps/api/core";
+import { openUrl } from "@tauri-apps/plugin-opener";
 import { Checkbox } from "@/components/ui/checkbox";
 import { Button } from "@/components/ui/button";
 import { GlobalShortcutSection } from "@/components/global-shortcut-section";
@@ -121,7 +124,7 @@ function MenubarIconStylePreview({
     );
   }
 
-  if (style === "bars") {
+  if (style === "agents") {
     const trackClass = isActive ? "bg-primary-foreground/15" : "bg-foreground/15";
     const remainderClass = isActive ? "bg-primary-foreground/20" : "bg-foreground/15";
     const fillClass = isActive ? "bg-primary-foreground" : "bg-foreground";
@@ -556,6 +559,62 @@ export function SettingsPage({
           </DndContext>
         </div>
       </section>
+      <WebApiSection />
     </div>
+  );
+}
+
+function WebApiSection() {
+  const [port, setPort] = useState<number | null>(null);
+  const [copied, setCopied] = useState(false);
+
+  useEffect(() => {
+    if (!isTauri()) return;
+    invoke<number | null>("get_local_http_port")
+      .then(setPort)
+      .catch(() => setPort(null));
+  }, []);
+
+  if (!port) return null;
+
+  const url = `http://localhost:${port}`;
+
+  const handleCopy = () => {
+    navigator.clipboard.writeText(url).then(() => {
+      setCopied(true);
+      setTimeout(() => setCopied(false), 1500);
+    });
+  };
+
+  const handleOpen = () => {
+    openUrl(url).catch(() => window.open(url, "_blank"));
+  };
+
+  return (
+    <section>
+      <h3 className="text-lg font-semibold mb-0">Web Dashboard</h3>
+      <p className="text-sm text-muted-foreground mb-2">
+        Access your usage stats from any browser on this machine
+      </p>
+      <div className="flex items-center gap-2 rounded-lg border border-violet-500/20 bg-violet-500/5 px-3 py-2.5">
+        <span className="flex-1 font-mono text-sm text-violet-300 select-all">{url}</span>
+        <button
+          type="button"
+          onClick={handleCopy}
+          className="flex size-7 shrink-0 items-center justify-center rounded-md text-violet-400 transition-colors hover:bg-violet-500/15 hover:text-violet-300"
+          aria-label="Copy URL"
+        >
+          {copied ? <Check className="size-3.5" /> : <Copy className="size-3.5" />}
+        </button>
+        <button
+          type="button"
+          onClick={handleOpen}
+          className="flex size-7 shrink-0 items-center justify-center rounded-md text-violet-400 transition-colors hover:bg-violet-500/15 hover:text-violet-300"
+          aria-label="Open in browser"
+        >
+          <ExternalLink className="size-3.5" />
+        </button>
+      </div>
+    </section>
   );
 }

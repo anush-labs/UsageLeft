@@ -11,7 +11,9 @@ import {
   DEFAULT_AUTO_UPDATE_INTERVAL,
   DEFAULT_DISPLAY_MODE,
   DEFAULT_GLOBAL_SHORTCUT,
+  DEFAULT_MENUBAR_AGENT_COUNT,
   DEFAULT_MENUBAR_ICON_STYLE,
+  DEFAULT_MENUBAR_LOGO_COLOR,
   DEFAULT_RESET_TIMER_DISPLAY_MODE,
   DEFAULT_START_ON_LOGIN,
   DEFAULT_THEME_MODE,
@@ -20,7 +22,9 @@ import {
   loadAutoUpdateInterval,
   loadDisplayMode,
   loadGlobalShortcut,
+  loadMenubarAgentCount,
   loadMenubarIconStyle,
+  loadMenubarLogoColor,
   migrateLegacyTraySettings,
   loadPluginSettings,
   loadResetTimerDisplayMode,
@@ -32,7 +36,9 @@ import {
   type AutoUpdateIntervalMinutes,
   type DisplayMode,
   type GlobalShortcut,
+  type MenubarAgentCount,
   type MenubarIconStyle,
+  type MenubarLogoColor,
   type PluginSettings,
   type ResetTimerDisplayMode,
   type ThemeMode,
@@ -50,6 +56,8 @@ type UseSettingsBootstrapArgs = {
   setGlobalShortcut: (value: GlobalShortcut) => void
   setStartOnLogin: (value: boolean) => void
   setMenubarIconStyle: (value: MenubarIconStyle) => void
+  setMenubarAgentCount: (value: MenubarAgentCount) => void
+  setMenubarLogoColor: (value: MenubarLogoColor) => void
   setLoadingForPlugins: (ids: string[]) => void
   setErrorForPlugins: (ids: string[], error: string) => void
   startBatch: (pluginIds?: string[]) => Promise<string[] | undefined>
@@ -66,6 +74,8 @@ export function useSettingsBootstrap({
   setGlobalShortcut,
   setStartOnLogin,
   setMenubarIconStyle,
+  setMenubarAgentCount,
+  setMenubarLogoColor,
   setLoadingForPlugins,
   setErrorForPlugins,
   startBatch,
@@ -165,6 +175,20 @@ export function useSettingsBootstrap({
           console.error("Failed to load menubar icon style:", error)
         }
 
+        let storedMenubarAgentCount = DEFAULT_MENUBAR_AGENT_COUNT
+        try {
+          storedMenubarAgentCount = await loadMenubarAgentCount()
+        } catch (error) {
+          console.error("Failed to load menubar agent count:", error)
+        }
+
+        let storedMenubarLogoColor = DEFAULT_MENUBAR_LOGO_COLOR
+        try {
+          storedMenubarLogoColor = await loadMenubarLogoColor()
+        } catch (error) {
+          console.error("Failed to load menubar logo color:", error)
+        }
+
         if (isMounted) {
           setPluginSettings(normalized)
           setAutoUpdateInterval(storedInterval)
@@ -175,6 +199,8 @@ export function useSettingsBootstrap({
           setGlobalShortcut(storedGlobalShortcut)
           setStartOnLogin(storedStartOnLogin)
           setMenubarIconStyle(storedMenubarIconStyle)
+          setMenubarAgentCount(storedMenubarAgentCount)
+          setMenubarLogoColor(storedMenubarLogoColor)
 
           const enabledIds = getEnabledPluginIds(normalized)
           setLoadingForPlugins(enabledIds)
@@ -204,7 +230,9 @@ export function useSettingsBootstrap({
     setErrorForPlugins,
     setGlobalShortcut,
     setLoadingForPlugins,
+    setMenubarAgentCount,
     setMenubarIconStyle,
+    setMenubarLogoColor,
     migrateLegacyTraySettings,
     setPluginSettings,
     setPluginsMeta,

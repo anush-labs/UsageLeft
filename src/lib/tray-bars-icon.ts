@@ -22,32 +22,7 @@ function escapeXmlText(text: string): string {
     .replace(/'/g, "&apos;")
 }
 
-function makeRoundedBarPath(args: {
-  x: number
-  y: number
-  w: number
-  h: number
-  leftRadius: number
-  rightRadius: number
-}): string {
-  const { x, y, w, h } = args
-  const leftRadius = Math.max(0, Math.min(args.leftRadius, h / 2, w / 2))
-  const rightRadius = Math.max(0, Math.min(args.rightRadius, h / 2, w / 2))
-  const x1 = x + w
-  const y1 = y + h
-  return [
-    `M ${x + leftRadius} ${y}`,
-    `L ${x1 - rightRadius} ${y}`,
-    `A ${rightRadius} ${rightRadius} 0 0 1 ${x1} ${y + rightRadius}`,
-    `L ${x1} ${y1 - rightRadius}`,
-    `A ${rightRadius} ${rightRadius} 0 0 1 ${x1 - rightRadius} ${y1}`,
-    `L ${x + leftRadius} ${y1}`,
-    `A ${leftRadius} ${leftRadius} 0 0 1 ${x} ${y1 - leftRadius}`,
-    `L ${x} ${y + leftRadius}`,
-    `A ${leftRadius} ${leftRadius} 0 0 1 ${x + leftRadius} ${y}`,
-    "Z",
-  ].join(" ")
-}
+
 
 function getMinVisibleRemainderPx(trackW: number): number {
   // Keep remainder clearly visible after tray downsampling.
@@ -161,6 +136,20 @@ function getSvgLayout(args: {
   // Optical correction + global nudge down to align with the tray slot center.
   const textY = Math.round(sizePx / 2) + 1 + verticalNudgePx
 
+  if (style === "text") {
+    return {
+      width: hasPercentText ? textWidth + pad * 2 : 1,
+      height,
+      pad,
+      gap,
+      barsX: pad,
+      barsWidth: 0,
+      textX: pad,
+      textY,
+      fontSize,
+    }
+  }
+
   if (style === "agents") {
     const n = Math.max(1, Math.min(6, barCount))
     const segmentW = Math.max(20, Math.round(sizePx * 1.28))
@@ -226,18 +215,21 @@ function getSvgLayout(args: {
 export function makeTrayBarsSvg(args: {
   bars: TrayPrimaryBar[]
   sizePx: number
-  style?: MenubarIconStyle
-  percentText?: string
+  style: MenubarIconStyle
+  percentText: string
+  textSegments?: { text: string; color: string }[]
   providerIconUrl?: string
+  providerIconUrls?: string[]
   foregroundColor?: string
 }): string {
-  const { bars, sizePx, style = "provider", percentText, providerIconUrl, foregroundColor = "black" } = args
-  const barsForStyle = style === "bars" || style === "agents" ? bars : bars.slice(0, 1)
+  const { bars, sizePx, style, percentText: rawPercentText, textSegments, providerIconUrl, providerIconUrls, foregroundColor = "#ffffff" } = args
+  const barsForStyle = style === "agents" ? bars : bars.slice(0, 1)
+  const icons = providerIconUrls || (providerIconUrl ? [providerIconUrl] : [])
   // Intentionally render a single empty track when bars mode has no data yet
   // so the tray icon keeps a stable shape during loading/initialization.
   const maxBars = style === "agents" ? 6 : 4
   const n = Math.max(1, Math.min(maxBars, barsForStyle.length || 1))
-  const text = normalizePercentText(percentText)
+  const text = normalizePercentText(rawPercentText)
   const layout = getSvgLayout({
     sizePx,
     style,
@@ -247,7 +239,6 @@ export function makeTrayBarsSvg(args: {
 
   const width = layout.width
   const height = layout.height
-  const trackW = layout.barsWidth
 
   const parts: string[] = []
   parts.push(
@@ -259,7 +250,7 @@ export function makeTrayBarsSvg(args: {
     const iconSize = Math.max(6, Math.round(sizePx - 2 * layout.pad * 0.5) - (hasText ? PROVIDER_ICON_SHRINK_PX : 0))
     const x = layout.barsX
     const y = Math.round((height - iconSize) / 2) + (hasText ? PROVIDER_ICON_VERTICAL_NUDGE_PX : 0)
-    const href = typeof providerIconUrl === "string" ? providerIconUrl.trim() : ""
+    const href = typeof icons[0] === "string" ? icons[0].trim() : ""
 
     if (href.length > 0) {
       parts.push(
@@ -278,19 +269,16 @@ export function makeTrayBarsSvg(args: {
     const iconSize = Math.max(6, Math.round(sizePx - 2 * layout.pad * 0.5))
     const iconX = layout.barsX
     const iconY = Math.round((height - iconSize) / 2)
-    const href = typeof providerIconUrl === "string" ? providerIconUrl.trim() : ""
+    const href = typeof icons[0] === "string" ? icons[0].trim() : ""
 
     if (href.length > 0) {
       parts.push(
         renderMaskedIcon({ id: "donut-provider-mask", href, x: iconX, y: iconY, size: iconSize, fill: foregroundColor })
       )
     } else {
-      const fcx = iconX + iconSize / 2
-      const fcy = iconY + iconSize / 2
-      const fallbackR = Math.max(2, iconSize / 2 - 1.5)
-      const fallbackSW = Math.max(1.5, Math.round(iconSize * 0.14))
+      const label = shortAgentLabel(barsForStyle[0])
       parts.push(
-        `<circle cx="${fcx}" cy="${fcy}" r="${fallbackR}" fill="none" stroke="${foregroundColor}" stroke-width="${fallbackSW}" opacity="1" shape-rendering="geometricPrecision" />`
+        `<text x="${iconX + iconSize / 2}" y="${iconY + iconSize / 2 + 1}" fill="${foregroundColor}" font-family="-apple-system,BlinkMacSystemFont,'SF Pro Text',sans-serif" font-size="${Math.max(6, Math.round(iconSize * 0.55))}" font-weight="800" text-anchor="middle" dominant-baseline="middle">${escapeXmlText(label)}</text>`
       )
     }
 
@@ -328,9 +316,19 @@ export function makeTrayBarsSvg(args: {
       const bar = barsForStyle[i]
       const x = layout.pad + i * (segmentW + layout.gap)
       const label = shortAgentLabel(bar)
-      parts.push(
-        `<text x="${x + segmentW / 2}" y="${labelY}" fill="${foregroundColor}" font-family="Inter,Arial,sans-serif" font-size="${layout.fontSize}" font-weight="800" text-anchor="middle" dominant-baseline="middle">${escapeXmlText(label)}</text>`
-      )
+      const href = icons[i]?.trim()
+      if (href && href.length > 0) {
+        const iconSize = Math.max(6, Math.round(height * 0.45))
+        const iconY = Math.round((trackY - iconSize) / 2)
+        const iconX = x + (segmentW - iconSize) / 2
+        parts.push(
+          renderMaskedIcon({ id: `agent-mask-${i}`, href, x: iconX, y: iconY, size: iconSize, fill: foregroundColor })
+        )
+      } else {
+        parts.push(
+          `<text x="${x + segmentW / 2}" y="${labelY}" fill="${foregroundColor}" font-family="Inter,Arial,sans-serif" font-size="${layout.fontSize}" font-weight="800" text-anchor="middle" dominant-baseline="middle">${escapeXmlText(label)}</text>`
+        )
+      }
       parts.push(
         `<rect x="${x}" y="${trackY}" width="${segmentW}" height="${trackH}" rx="${rx}" fill="${foregroundColor}" opacity="${BARS_TRACK_OPACITY}" />`
       )
@@ -350,71 +348,17 @@ export function makeTrayBarsSvg(args: {
         }
       }
     }
-  } else {
-    // style === "bars"
-    const trackOpacity = BARS_TRACK_OPACITY
-    const remainderOpacity = BARS_REMAINDER_OPACITY
-    const fillOpacity = BARS_FILL_OPACITY
-
-    const layoutN = Math.max(2, n)
-    const trackH = Math.max(
-      1,
-      Math.floor((height - 2 * layout.pad - (layoutN - 1) * layout.gap) / layoutN)
-    )
-    const rx = Math.max(1, Math.floor(trackH / 3))
-
-    const totalBarsHeight = n * trackH + (n - 1) * layout.gap
-    const availableHeight = height - 2 * layout.pad
-    const yOffset = layout.pad + Math.floor((availableHeight - totalBarsHeight) / 2)
-
-    for (let i = 0; i < n; i += 1) {
-      const bar = barsForStyle[i]
-      const y = yOffset + i * (trackH + layout.gap) + 1
-      const x = layout.barsX
-
-      parts.push(
-        `<rect x="${x}" y="${y}" width="${trackW}" height="${trackH}" rx="${rx}" fill="${foregroundColor}" opacity="${trackOpacity}" />`
-      )
-
-      const fraction = bar?.fraction
-      if (typeof fraction === "number" && Number.isFinite(fraction) && fraction >= 0) {
-        const { fillW, remainderDrawW, dividerX } = getBarFillLayout(trackW, fraction)
-        if (fillW > 0) {
-          const movingEdgeRadius = Math.max(0, Math.floor(rx * 0.35))
-          if (fillW >= trackW) {
-            parts.push(
-              `<rect x="${x}" y="${y}" width="${fillW}" height="${trackH}" rx="${rx}" fill="${foregroundColor}" opacity="${fillOpacity}" />`
-            )
-          } else {
-            const fillPath = makeRoundedBarPath({
-              x,
-              y,
-              w: fillW,
-              h: trackH,
-              leftRadius: rx,
-              rightRadius: movingEdgeRadius,
-            })
-            parts.push(`<path d="${fillPath}" fill="${foregroundColor}" opacity="${fillOpacity}" />`)
-          }
-        }
-
-        if (fillW > 0 && remainderDrawW > 0 && dividerX !== null) {
-          const remainderX = x + dividerX
-          const remainderPath = makeRoundedBarPath({
-            x: remainderX,
-            y,
-            w: remainderDrawW,
-            h: trackH,
-            leftRadius: Math.max(0, Math.floor(rx * 0.2)),
-            rightRadius: rx,
-          })
-          parts.push(`<path d="${remainderPath}" fill="${foregroundColor}" opacity="${remainderOpacity}" />`)
-        }
-      }
-    }
   }
 
-  if (text) {
+  if (textSegments && textSegments.length > 0) {
+    // We roughly estimate text width to lay out multiple tspans.
+    // However, SVG 1.1 supports <tspan> sequentially!
+    // But since we can just construct multiple text elements or tspans, we can use <text> with <tspan>
+    const tspans = textSegments.map(seg => `<tspan fill="${seg.color}">${escapeXmlText(seg.text)}</tspan>`).join(" ")
+    parts.push(
+      `<text x="${layout.textX}" y="${layout.textY}" font-family="-apple-system,BlinkMacSystemFont,'SF Pro Text',sans-serif" font-size="${layout.fontSize}" font-weight="700" dominant-baseline="middle">${tspans}</text>`
+    )
+  } else if (text) {
     parts.push(
       `<text x="${layout.textX}" y="${layout.textY}" fill="${foregroundColor}" font-family="-apple-system,BlinkMacSystemFont,'SF Pro Text',sans-serif" font-size="${layout.fontSize}" font-weight="700" dominant-baseline="middle">${escapeXmlText(text)}</text>`
     )
@@ -462,17 +406,21 @@ export async function renderTrayBarsIcon(args: {
   sizePx: number
   style?: MenubarIconStyle
   percentText?: string
+  textSegments?: { text: string; color: string }[]
   providerIconUrl?: string
+  providerIconUrls?: string[]
   foregroundColor?: string
 }): Promise<Image> {
-  const { bars, sizePx, style = "provider", percentText, providerIconUrl, foregroundColor } = args
+  const { bars, sizePx, style = "provider", percentText, textSegments, providerIconUrl, providerIconUrls, foregroundColor } = args
   const text = normalizePercentText(percentText)
   const svg = makeTrayBarsSvg({
     bars,
     sizePx,
     style,
-    percentText: text,
+    percentText: text || "",
+    textSegments,
     providerIconUrl,
+    providerIconUrls,
     foregroundColor,
   })
   const layout = getSvgLayout({

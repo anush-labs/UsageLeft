@@ -4,13 +4,23 @@ import type { PluginMeta } from "@/lib/plugin-types";
 // Refresh cooldown duration in milliseconds (5 minutes)
 export const REFRESH_COOLDOWN_MS = 300_000;
 
+export const PASTEL_COLORS = [
+  "#FFB3BA", "#FFDFBA", "#FFFFBA", "#BAFFC9", "#BAE1FF",
+  "#E8B4B8", "#EED6D3", "#B5EAD7", "#C7CEEA", "#E2F0CB",
+  "#FFDAC1", "#FF9AA2", "#FFB7B2", "#E0BBE4", "#957DAD",
+  "#D291BC", "#FEC8D8", "#FFDFD3", "#F3E1E1", "#D5ECC2"
+];
+
 // Spec: persist plugin order + disabled list; new plugins append, default disabled unless in DEFAULT_ENABLED_PLUGINS.
 export type PluginSettings = {
   order: string[];
   disabled: string[];
+  customColors?: Record<string, string>;
 };
 
-export type AutoUpdateIntervalMinutes = 5 | 15 | 30 | 60;
+export type AutoUpdateIntervalMinutes = 1 | 2 | 5 | 15;
+
+export type MenubarLogoColor = "white" | "black" | "original";
 
 export type ThemeMode = "system" | "light" | "dark";
 
@@ -20,7 +30,9 @@ export type ResetTimerDisplayMode = "relative" | "absolute";
 
 export type TimeFormatMode = "auto" | "12h" | "24h";
 
-export type MenubarIconStyle = "agents" | "provider" | "bars" | "donut";
+export type MenubarIconStyle = "text" | "agents" | "provider" | "donut";
+
+export type MenubarAgentCount = 1 | 2 | 3 | 4 | 5 | 6 | 8;
 
 export type GlobalShortcut = string | null;
 
@@ -32,39 +44,57 @@ const DISPLAY_MODE_KEY = "displayMode";
 const RESET_TIMER_DISPLAY_MODE_KEY = "resetTimerDisplayMode";
 const TIME_FORMAT_MODE_KEY = "timeFormatMode";
 const MENUBAR_ICON_STYLE_KEY = "menubarIconStyle";
+const MENUBAR_AGENT_COUNT_KEY = "menubarAgentCount";
+const MENUBAR_LOGO_COLOR_KEY = "menubarLogoColor";
 const LEGACY_TRAY_ICON_STYLE_KEY = "trayIconStyle";
 const LEGACY_TRAY_SHOW_PERCENTAGE_KEY = "trayShowPercentage";
 const GLOBAL_SHORTCUT_KEY = "globalShortcut";
 const START_ON_LOGIN_KEY = "startOnLogin";
 
 export const DEFAULT_AUTO_UPDATE_INTERVAL: AutoUpdateIntervalMinutes = 15;
-export const DEFAULT_THEME_MODE: ThemeMode = "system";
+export const DEFAULT_THEME_MODE: ThemeMode = "dark";
 export const DEFAULT_DISPLAY_MODE: DisplayMode = "left";
 export const DEFAULT_RESET_TIMER_DISPLAY_MODE: ResetTimerDisplayMode = "relative";
 export const DEFAULT_TIME_FORMAT_MODE: TimeFormatMode = "auto";
-export const DEFAULT_MENUBAR_ICON_STYLE: MenubarIconStyle = "agents";
+export const DEFAULT_MENUBAR_ICON_STYLE: MenubarIconStyle = "text";
+export const DEFAULT_MENUBAR_AGENT_COUNT: MenubarAgentCount = 4;
+export const DEFAULT_MENUBAR_LOGO_COLOR: MenubarLogoColor = "white";
 export const DEFAULT_GLOBAL_SHORTCUT: GlobalShortcut = null;
 export const DEFAULT_START_ON_LOGIN = false;
 
-const AUTO_UPDATE_INTERVALS: AutoUpdateIntervalMinutes[] = [5, 15, 30, 60];
+const AUTO_UPDATE_INTERVALS: AutoUpdateIntervalMinutes[] = [1, 2, 5, 15];
+const MENUBAR_LOGO_COLORS: MenubarLogoColor[] = ["white", "black", "original"];
 const THEME_MODES: ThemeMode[] = ["system", "light", "dark"];
 const DISPLAY_MODES: DisplayMode[] = ["used", "left"];
 const RESET_TIMER_DISPLAY_MODES: ResetTimerDisplayMode[] = ["relative", "absolute"];
 const TIME_FORMAT_MODES: TimeFormatMode[] = ["auto", "12h", "24h"];
-const MENUBAR_ICON_STYLES: MenubarIconStyle[] = ["agents", "provider", "donut", "bars"];
+const MENUBAR_ICON_STYLES: MenubarIconStyle[] = ["text", "agents", "provider", "donut"];
+const MENUBAR_AGENT_COUNTS: MenubarAgentCount[] = [1, 2, 3, 4, 5, 6, 8];
 
 export const MENUBAR_ICON_STYLE_OPTIONS: { value: MenubarIconStyle; label: string }[] = [
-  { value: "agents", label: "Agents" },
-  { value: "provider", label: "Plugin" },
+  { value: "text", label: "Text Only" },
   { value: "donut", label: "Donut" },
-  { value: "bars", label: "Bars" },
+  { value: "provider", label: "Provider" },
+  { value: "agents", label: "Agents" }
 ];
+
+export const MENUBAR_AGENT_COUNT_OPTIONS: { value: MenubarAgentCount; label: string }[] =
+  MENUBAR_AGENT_COUNTS.map((value) => ({
+    value,
+    label: String(value),
+  }));
 
 export const AUTO_UPDATE_OPTIONS: { value: AutoUpdateIntervalMinutes; label: string }[] =
   AUTO_UPDATE_INTERVALS.map((value) => ({
     value,
-    label: value === 60 ? "1 hour" : `${value} min`,
+    label: `${value} min`,
   }));
+
+export const MENUBAR_LOGO_COLOR_OPTIONS: { value: MenubarLogoColor; label: string }[] = [
+  { value: "white", label: "White" },
+  { value: "black", label: "Black" },
+  { value: "original", label: "Original" },
+];
 
 export const THEME_OPTIONS: { value: ThemeMode; label: string }[] =
   THEME_MODES.map((value) => ({
@@ -90,11 +120,12 @@ export const TIME_FORMAT_OPTIONS: { value: TimeFormatMode; label: string }[] = [
 
 const store = new LazyStore(SETTINGS_STORE_PATH);
 
-const DEFAULT_ENABLED_PLUGINS = new Set(["claude", "codex", "cursor"]);
+const DEFAULT_ENABLED_PLUGINS = new Set(["claude", "codex", "cursor", "gemini", "copilot"]);
 
 export const DEFAULT_PLUGIN_SETTINGS: PluginSettings = {
   order: [],
   disabled: [],
+  customColors: {},
 };
 
 export async function loadPluginSettings(): Promise<PluginSettings> {
@@ -103,6 +134,7 @@ export async function loadPluginSettings(): Promise<PluginSettings> {
   return {
     order: Array.isArray(stored.order) ? stored.order : [],
     disabled: Array.isArray(stored.disabled) ? stored.disabled : [],
+    customColors: stored.customColors && typeof stored.customColors === 'object' ? stored.customColors : {},
   };
 }
 
@@ -160,7 +192,8 @@ export function normalizePluginSettings(
       disabled.push(id);
     }
   }
-  return { order, disabled };
+  const customColors = settings.customColors ?? {};
+  return { order, disabled, customColors };
 }
 
 export function arePluginSettingsEqual(
@@ -174,6 +207,13 @@ export function arePluginSettingsEqual(
   }
   for (let i = 0; i < a.disabled.length; i += 1) {
     if (a.disabled[i] !== b.disabled[i]) return false;
+  }
+  const aColors = a.customColors || {};
+  const bColors = b.customColors || {};
+  const aKeys = Object.keys(aColors);
+  if (aKeys.length !== Object.keys(bColors).length) return false;
+  for (const k of aKeys) {
+    if (aColors[k] !== bColors[k]) return false;
   }
   return true;
 }
@@ -262,6 +302,40 @@ export async function saveMenubarIconStyle(style: MenubarIconStyle): Promise<voi
   await store.save();
 }
 
+function isMenubarAgentCount(value: unknown): value is MenubarAgentCount {
+  return (
+    typeof value === "number" &&
+    MENUBAR_AGENT_COUNTS.includes(value as MenubarAgentCount)
+  );
+}
+
+export async function loadMenubarAgentCount(): Promise<MenubarAgentCount> {
+  const stored = await store.get<unknown>(MENUBAR_AGENT_COUNT_KEY);
+  if (isMenubarAgentCount(stored)) return stored;
+  return DEFAULT_MENUBAR_AGENT_COUNT;
+}
+
+export async function saveMenubarAgentCount(count: MenubarAgentCount): Promise<void> {
+  await store.set(MENUBAR_AGENT_COUNT_KEY, count);
+  await store.save();
+}
+
+const MENUBAR_LOGO_COLORS_SET = new Set<string>(MENUBAR_LOGO_COLORS)
+function isMenubarLogoColor(value: unknown): value is MenubarLogoColor {
+  return typeof value === "string" && MENUBAR_LOGO_COLORS_SET.has(value)
+}
+
+export async function loadMenubarLogoColor(): Promise<MenubarLogoColor> {
+  const stored = await store.get<unknown>(MENUBAR_LOGO_COLOR_KEY);
+  if (isMenubarLogoColor(stored)) return stored;
+  return DEFAULT_MENUBAR_LOGO_COLOR;
+}
+
+export async function saveMenubarLogoColor(color: MenubarLogoColor): Promise<void> {
+  await store.set(MENUBAR_LOGO_COLOR_KEY, color);
+  await store.save();
+}
+
 type LegacyStoreWithDelete = {
   delete?: (key: string) => Promise<void>;
 };
@@ -288,9 +362,7 @@ export async function migrateLegacyTraySettings(): Promise<void> {
   if (!hasLegacyTrayStyle && !hasLegacyShowPercentage) return;
 
   if (hasLegacyTrayStyle && currentMenubarStyle == null) {
-    if (legacyTrayStyle === "bars") {
-      await store.set(MENUBAR_ICON_STYLE_KEY, "bars");
-    } else if (legacyTrayStyle === "circle") {
+    if (legacyTrayStyle === "circle") {
       await store.set(MENUBAR_ICON_STYLE_KEY, "donut");
     }
   }

@@ -6,6 +6,8 @@ export type SettingsPluginState = {
   id: string
   name: string
   enabled: boolean
+  customColor?: string
+  originalBrandColor?: string
 }
 
 type UseSettingsPluginListArgs = {
@@ -22,11 +24,14 @@ export function useSettingsPluginList({ pluginSettings, pluginsMeta }: UseSettin
       .map((id) => {
         const meta = pluginMap.get(id)
         if (!meta) return null
-        return {
+        const state: SettingsPluginState = {
           id,
           name: meta.name,
           enabled: !pluginSettings.disabled.includes(id),
+          customColor: pluginSettings.customColors?.[id],
+          originalBrandColor: meta.brandColor,
         }
+        return state
       })
       .filter((plugin): plugin is SettingsPluginState => Boolean(plugin))
   }, [pluginSettings, pluginsMeta])

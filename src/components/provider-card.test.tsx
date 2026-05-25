@@ -8,6 +8,7 @@ import { groupLinesByType } from "@/lib/group-lines-by-type"
 import { formatResetTooltipText } from "@/lib/reset-tooltip"
 import { REFRESH_COOLDOWN_MS } from "@/lib/settings"
 import { formatFixedPrecisionNumber } from "@/lib/utils"
+import { APP_REPO_URL } from "@/lib/app-links"
 
 vi.mock("@tauri-apps/plugin-opener", () => ({
   openUrl: vi.fn(() => Promise.resolve()),
@@ -123,7 +124,7 @@ describe("ProviderCard", () => {
     )
 
     await userEvent.click(screen.getByRole("button", { name: /status/i }))
-    expect(openUrl).toHaveBeenCalledWith("https://status.example.com")
+    expect(openUrl).toHaveBeenCalledWith(APP_REPO_URL)
     expect(screen.getByRole("button", { name: /billing/i })).toBeInTheDocument()
   })
 

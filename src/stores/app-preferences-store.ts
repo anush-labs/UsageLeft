@@ -3,7 +3,9 @@ import {
   DEFAULT_AUTO_UPDATE_INTERVAL,
   DEFAULT_DISPLAY_MODE,
   DEFAULT_GLOBAL_SHORTCUT,
+  DEFAULT_MENUBAR_AGENT_COUNT,
   DEFAULT_MENUBAR_ICON_STYLE,
+  DEFAULT_MENUBAR_LOGO_COLOR,
   DEFAULT_RESET_TIMER_DISPLAY_MODE,
   DEFAULT_START_ON_LOGIN,
   DEFAULT_THEME_MODE,
@@ -11,7 +13,9 @@ import {
   type AutoUpdateIntervalMinutes,
   type DisplayMode,
   type GlobalShortcut,
+  type MenubarAgentCount,
   type MenubarIconStyle,
+  type MenubarLogoColor,
   type ResetTimerDisplayMode,
   type ThemeMode,
   type TimeFormatMode,
@@ -26,6 +30,8 @@ type AppPreferencesStore = {
   globalShortcut: GlobalShortcut
   startOnLogin: boolean
   menubarIconStyle: MenubarIconStyle
+  menubarAgentCount: MenubarAgentCount
+  menubarLogoColor: MenubarLogoColor
   setAutoUpdateInterval: (value: AutoUpdateIntervalMinutes) => void
   setThemeMode: (value: ThemeMode) => void
   setDisplayMode: (value: DisplayMode) => void
@@ -34,6 +40,8 @@ type AppPreferencesStore = {
   setGlobalShortcut: (value: GlobalShortcut) => void
   setStartOnLogin: (value: boolean) => void
   setMenubarIconStyle: (value: MenubarIconStyle) => void
+  setMenubarAgentCount: (value: MenubarAgentCount) => void
+  setMenubarLogoColor: (value: MenubarLogoColor) => void
   resetState: () => void
 }
 
@@ -46,6 +54,8 @@ const initialState = {
   globalShortcut: DEFAULT_GLOBAL_SHORTCUT,
   startOnLogin: DEFAULT_START_ON_LOGIN,
   menubarIconStyle: DEFAULT_MENUBAR_ICON_STYLE,
+  menubarAgentCount: DEFAULT_MENUBAR_AGENT_COUNT,
+  menubarLogoColor: DEFAULT_MENUBAR_LOGO_COLOR,
 }
 
 export const useAppPreferencesStore = create<AppPreferencesStore>((set) => ({
@@ -58,5 +68,7 @@ export const useAppPreferencesStore = create<AppPreferencesStore>((set) => ({
   setGlobalShortcut: (value) => set({ globalShortcut: value }),
   setStartOnLogin: (value) => set({ startOnLogin: value }),
   setMenubarIconStyle: (value) => set({ menubarIconStyle: value }),
+  setMenubarAgentCount: (value) => set({ menubarAgentCount: value }),
+  setMenubarLogoColor: (value) => set({ menubarLogoColor: value }),
   resetState: () => set(initialState),
 }))

@@ -31,9 +31,13 @@ export function useAppPluginViews({
       .map((id) => {
         const meta = metaById.get(id)
         if (!meta) return null
+        const overridenMeta: PluginMeta = {
+          ...meta,
+          brandColor: pluginSettings.customColors?.[id] ?? meta.brandColor,
+        }
         const state =
           pluginStates[id] ?? { data: null, loading: false, error: null, lastManualRefreshAt: null, lastUpdatedAt: null }
-        return { meta, ...state }
+        return { meta: overridenMeta, ...state }
       })
       .filter((plugin): plugin is DisplayPluginState => Boolean(plugin))
   }, [pluginSettings, pluginStates, pluginsMeta])
@@ -51,7 +55,7 @@ export function useAppPluginViews({
         id: plugin.id,
         name: plugin.name,
         iconUrl: plugin.iconUrl,
-        brandColor: plugin.brandColor,
+        brandColor: pluginSettings.customColors?.[plugin.id] ?? plugin.brandColor,
       }))
   }, [pluginSettings, pluginsMeta])
 

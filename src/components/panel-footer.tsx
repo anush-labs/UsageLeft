@@ -1,8 +1,9 @@
 import { useMemo } from "react";
+import { openUrl } from "@tauri-apps/plugin-opener";
 import { Button } from "@/components/ui/button";
-import { AboutDialog } from "@/components/about-dialog";
 import type { UpdateStatus } from "@/hooks/use-app-update";
 import { useNowTicker } from "@/hooks/use-now-ticker";
+import { APP_REPO_URL } from "@/lib/app-links";
 
 interface PanelFooterProps {
   version: string;
@@ -11,9 +12,6 @@ interface PanelFooterProps {
   onUpdateInstall: () => void;
   onUpdateCheck: () => void;
   onRefreshAll?: () => void;
-  showAbout: boolean;
-  onShowAbout: () => void;
-  onCloseAbout: () => void;
 }
 
 function VersionDisplay({
@@ -78,7 +76,7 @@ function VersionDisplay({
           onClick={onVersionClick}
           className="text-xs text-muted-foreground hover:text-foreground transition-colors cursor-pointer"
         >
-          OpenUsage {version}
+          UsageLeft {version}
         </button>
       );
   }
@@ -91,9 +89,6 @@ export function PanelFooter({
   onUpdateInstall,
   onUpdateCheck,
   onRefreshAll,
-  showAbout,
-  onShowAbout,
-  onCloseAbout,
 }: PanelFooterProps) {
   const now = useNowTicker({
     enabled: Boolean(autoUpdateNextAt),
@@ -119,7 +114,9 @@ export function PanelFooter({
           updateStatus={updateStatus}
           onUpdateInstall={onUpdateInstall}
           onUpdateCheck={onUpdateCheck}
-          onVersionClick={onShowAbout}
+          onVersionClick={() => {
+            openUrl(APP_REPO_URL).catch(console.error)
+          }}
         />
         {autoUpdateNextAt !== null && onRefreshAll ? (
           <button
@@ -139,9 +136,6 @@ export function PanelFooter({
           </span>
         )}
       </div>
-      {showAbout && (
-        <AboutDialog version={version} onClose={onCloseAbout} />
-      )}
     </>
   );
 }

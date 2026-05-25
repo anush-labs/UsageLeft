@@ -88,8 +88,29 @@ export function useSettingsPluginActions({
     startBatch,
   ])
 
+  const handlePluginColorChange = useCallback((id: string, color: string | null) => {
+    if (!pluginSettings) return
+    const customColors = { ...pluginSettings.customColors }
+    if (color) {
+      customColors[id] = color
+    } else {
+      delete customColors[id]
+    }
+    
+    const nextSettings: PluginSettings = {
+      ...pluginSettings,
+      customColors,
+    }
+    setPluginSettings(nextSettings)
+    scheduleTrayIconUpdate("settings", TRAY_SETTINGS_DEBOUNCE_MS)
+    void savePluginSettings(nextSettings).catch((error) => {
+      console.error("Failed to save plugin color:", error)
+    })
+  }, [pluginSettings, scheduleTrayIconUpdate, setPluginSettings])
+
   return {
     handleReorder,
     handleToggle,
+    handlePluginColorChange,
   }
 }

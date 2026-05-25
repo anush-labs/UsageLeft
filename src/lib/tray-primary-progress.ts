@@ -32,6 +32,7 @@ export function getTrayPrimaryBars(args: {
   displayMode?: DisplayMode
   pluginId?: string
   activeOnly?: boolean
+  includeLabels?: boolean
 }): TrayPrimaryBar[] {
   const {
     pluginsMeta,
@@ -41,6 +42,7 @@ export function getTrayPrimaryBars(args: {
     displayMode = DEFAULT_DISPLAY_MODE,
     pluginId,
     activeOnly = false,
+    includeLabels = false,
   } = args
   if (!pluginSettings) return []
 
@@ -87,7 +89,7 @@ export function getTrayPrimaryBars(args: {
 
     if (activeOnly && typeof fraction !== "number") continue
 
-    out.push({ id, label: meta.name, fraction })
+    out.push(includeLabels ? { id, label: meta.name, fraction } : { id, fraction })
     if (out.length >= maxBars) break
   }
 

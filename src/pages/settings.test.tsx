@@ -59,6 +59,8 @@ const defaultProps = {
   onTimeFormatModeChange: vi.fn(),
   menubarIconStyle: "provider" as const,
   onMenubarIconStyleChange: vi.fn(),
+  menubarAgentCount: 4 as const,
+  onMenubarAgentCountChange: vi.fn(),
   traySettingsPreview: {
     bars: [{ id: "a", fraction: 0.7 }],
     providerBars: [{ id: "a", fraction: 0.7 }],
@@ -251,6 +253,18 @@ describe("SettingsPage", () => {
     )
     await userEvent.click(screen.getByRole("radio", { name: "Donut" }))
     expect(onMenubarIconStyleChange).toHaveBeenCalledWith("donut")
+  })
+
+  it("updates menu bar agent count", async () => {
+    const onMenubarAgentCountChange = vi.fn()
+    render(
+      <SettingsPage
+        {...defaultProps}
+        onMenubarAgentCountChange={onMenubarAgentCountChange}
+      />
+    )
+    await userEvent.click(screen.getByRole("radio", { name: "6" }))
+    expect(onMenubarAgentCountChange).toHaveBeenCalledWith(6)
   })
 
   it("does not render removed bar icon controls", () => {

@@ -3,6 +3,7 @@ import { Loader2, ChevronRight, ExternalLink as ExternalLinkIcon } from "lucide-
 import { useChangelog } from "@/hooks/use-changelog"
 import { Button } from "@/components/ui/button"
 import { openUrl } from "@tauri-apps/plugin-opener"
+import { APP_REPO_URL } from "@/lib/app-links"
 
 interface ChangelogDialogProps {
   currentVersion: string
@@ -89,7 +90,7 @@ function SimpleMarkdown({ content }: { content: string }) {
         return (
           <button
             key={i}
-            onClick={() => openUrl(part.url!).catch(console.error)}
+            onClick={() => openUrl(APP_REPO_URL).catch(console.error)}
             className={linkClass}
           >
             {part.content}
@@ -106,7 +107,7 @@ function SimpleMarkdown({ content }: { content: string }) {
         return (
           <button
             key={i}
-            onClick={() => openUrl(`https://github.com/robinebers/openusage/pull/${part.content.slice(1)}`).catch(console.error)}
+            onClick={() => openUrl(APP_REPO_URL).catch(console.error)}
             className={linkClass}
           >
             {part.content}
@@ -117,7 +118,7 @@ function SimpleMarkdown({ content }: { content: string }) {
         return (
           <button
             key={i}
-            onClick={() => openUrl(`https://github.com/${part.content.slice(1)}`).catch(console.error)}
+            onClick={() => openUrl(APP_REPO_URL).catch(console.error)}
             className={linkClass}
           >
             {part.content}
@@ -128,7 +129,7 @@ function SimpleMarkdown({ content }: { content: string }) {
         return (
           <button
             key={i}
-            onClick={() => openUrl(`https://github.com/robinebers/openusage/commit/${part.content}`).catch(console.error)}
+            onClick={() => openUrl(APP_REPO_URL).catch(console.error)}
             className={`${linkClass} font-mono`}
           >
             {part.content}
@@ -239,7 +240,7 @@ export function ChangelogDialog({ currentVersion, onBack, onClose }: ChangelogDi
                   </p>
                 </div>
                 <button
-                  onClick={() => openUrl(currentRelease.html_url).catch(console.error)}
+                  onClick={() => openUrl(APP_REPO_URL).catch(console.error)}
                   className="text-[10px] text-[#58a6ff] hover:underline flex items-center gap-1"
                 >
                   GitHub <ExternalLinkIcon className="w-3 h-3" />
@@ -255,7 +256,7 @@ export function ChangelogDialog({ currentVersion, onBack, onClose }: ChangelogDi
                   <p className="text-[10px] text-muted-foreground text-center">
                     Looking for older versions? Check the{" "}
                     <button 
-                      onClick={() => openUrl("https://github.com/robinebers/openusage/releases").catch(console.error)}
+                      onClick={() => openUrl(APP_REPO_URL).catch(console.error)}
                       className="text-[#58a6ff] hover:underline"
                     >
                       full changelog
@@ -269,7 +270,7 @@ export function ChangelogDialog({ currentVersion, onBack, onClose }: ChangelogDi
               <span className="text-sm font-medium mb-1">No specific notes for v{currentVersion}</span>
               <span className="text-xs mb-4">This version might be a pre-release or local build.</span>
               <button 
-                onClick={() => openUrl("https://github.com/robinebers/openusage/releases").catch(console.error)}
+                onClick={() => openUrl(APP_REPO_URL).catch(console.error)}
                 className="text-xs text-[#58a6ff] hover:underline"
               >
                 View all releases on GitHub

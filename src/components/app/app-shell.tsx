@@ -1,12 +1,15 @@
+import { invoke } from "@tauri-apps/api/core"
 import { useShallow } from "zustand/react/shallow"
 import { AppContent, type AppContentActionProps } from "@/components/app/app-content"
+import { TopNav } from "@/components/app/top-nav"
 import { PanelFooter } from "@/components/panel-footer"
-import { SideNav, type NavPlugin, type PluginContextAction } from "@/components/side-nav"
+import type { NavPlugin, PluginContextAction } from "@/components/side-nav"
 import type { DisplayPluginState } from "@/hooks/app/use-app-plugin-views"
 import type { SettingsPluginState } from "@/hooks/app/use-settings-plugin-list"
 import { useAppVersion } from "@/hooks/app/use-app-version"
 import { usePanel } from "@/hooks/app/use-panel"
 import { useAppUpdate } from "@/hooks/use-app-update"
+import { AgentDashboard } from "@/pages/agent-dashboard"
 import { useAppUiStore } from "@/stores/app-ui-store"
 
 type AppShellProps = {
@@ -29,9 +32,9 @@ export function AppShell({
   settingsPlugins,
   autoUpdateNextAt,
   selectedPlugin,
-  onPluginContextAction,
-  isPluginRefreshAvailable,
-  onNavReorder,
+  onPluginContextAction: _onPluginContextAction,
+  isPluginRefreshAvailable: _isPluginRefreshAvailable,
+  onNavReorder: _onNavReorder,
   appContentProps,
 }: AppShellProps) {
   const {
@@ -52,7 +55,6 @@ export function AppShell({
     containerRef,
     scrollRef,
     canScrollDown,
-    maxPanelHeightPx,
   } = usePanel({
     activeView,
     setActiveView,
@@ -68,48 +70,52 @@ export function AppShell({
     <div
       ref={containerRef}
       tabIndex={-1}
-      className="flex flex-col items-center p-6 pt-1.5 bg-transparent outline-none"
+      className="flex h-screen flex-col bg-[#0a0b14] outline-none"
     >
-      <div
-        className="relative bg-card rounded-xl overflow-hidden select-none w-full border shadow-lg flex flex-col"
-        style={maxPanelHeightPx ? { maxHeight: `${maxPanelHeightPx}px` } : undefined}
-      >
-        <div className="flex flex-1 min-h-0 flex-row">
-          <SideNav
-            activeView={activeView}
-            onViewChange={setActiveView}
-            plugins={navPlugins}
-            onPluginContextAction={onPluginContextAction}
-            isPluginRefreshAvailable={isPluginRefreshAvailable}
-            onReorder={onNavReorder}
+      <div className="relative flex min-h-0 flex-1 flex-col overflow-hidden bg-[#0a0b14]">
+        {activeView === "home" ? (
+          <AgentDashboard
+            plugins={displayPlugins}
+            scrollRef={scrollRef}
+            onRefreshAll={onRefreshAll}
+            onOpenPlugin={setActiveView}
+            onOpenSettings={() => setActiveView("settings")}
+            onQuitApp={() => {
+              invoke("quit_app").catch(console.error)
+            }}
           />
-          <div className="flex-1 flex flex-col px-3 pt-2 pb-1.5 min-w-0 bg-card dark:bg-muted/50">
-            <div className="relative flex-1 min-h-0">
-              <div ref={scrollRef} className="h-full overflow-y-auto scrollbar-none">
-                <AppContent
-                  {...appContentProps}
-                  displayPlugins={displayPlugins}
-                  settingsPlugins={settingsPlugins}
-                  selectedPlugin={selectedPlugin}
-                />
-              </div>
+        ) : (
+          <div className="flex min-h-0 flex-1 flex-col">
+            <TopNav
+              activeView={activeView}
+              navPlugins={navPlugins}
+              onViewChange={setActiveView}
+              onRefreshAll={onRefreshAll}
+              onQuitApp={() => invoke("quit_app").catch(console.error)}
+            />
+            <div className="relative min-h-0 flex-1 overflow-y-auto scrollbar-none px-4 py-4" ref={scrollRef}>
+              <AppContent
+                {...appContentProps}
+                displayPlugins={displayPlugins}
+                settingsPlugins={settingsPlugins}
+                selectedPlugin={selectedPlugin}
+              />
               <div
-                className={`pointer-events-none absolute inset-x-0 bottom-0 h-14 bg-gradient-to-t from-card dark:from-muted/50 to-transparent transition-opacity duration-200 ${canScrollDown ? "opacity-100" : "opacity-0"}`}
+                className={`pointer-events-none absolute inset-x-0 bottom-0 h-10 bg-gradient-to-t from-[#0a0b14] to-transparent transition-opacity duration-200 ${canScrollDown ? "opacity-100" : "opacity-0"}`}
               />
             </div>
-            <PanelFooter
-              version={appVersion}
-              autoUpdateNextAt={autoUpdateNextAt}
-              updateStatus={updateStatus}
-              onUpdateInstall={triggerInstall}
-              onUpdateCheck={checkForUpdates}
-              onRefreshAll={onRefreshAll}
-              showAbout={showAbout}
-              onShowAbout={() => setShowAbout(true)}
-              onCloseAbout={() => setShowAbout(false)}
-            />
+            <div className="border-t border-white/[0.06] px-4 py-1.5">
+              <PanelFooter
+                version={appVersion}
+                autoUpdateNextAt={autoUpdateNextAt}
+                updateStatus={updateStatus}
+                onUpdateInstall={triggerInstall}
+                onUpdateCheck={checkForUpdates}
+                onRefreshAll={onRefreshAll}
+              />
+            </div>
           </div>
-        </div>
+        )}
       </div>
     </div>
   )

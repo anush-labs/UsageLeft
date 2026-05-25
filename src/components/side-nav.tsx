@@ -28,6 +28,7 @@ function GaugeIcon({ className }: { className?: string }) {
 }
 import { cn } from "@/lib/utils"
 import { getRelativeLuminance } from "@/lib/color"
+import { APP_REPO_URL } from "@/lib/app-links"
 import { useDarkMode } from "@/hooks/use-dark-mode"
 
 type ActiveView = "home" | "settings" | string
@@ -255,7 +256,7 @@ export function SideNav({
       <NavButton
         isActive={false}
         onClick={() => {
-          openUrl("https://github.com/robinebers/openusage/issues").catch(console.error)
+          openUrl(APP_REPO_URL).catch(console.error)
           invoke("hide_panel").catch(console.error)
         }}
         aria-label="Help"
