@@ -14,13 +14,14 @@
       {
         "label": "main",
         "title": "UsageLeft",
-        "width": 1000,
-        "height": 650,
-        "minWidth": 800,
-        "minHeight": 500,
+        "width": 400,
+        "height": 400,
+        "minWidth": 300,
+        "minHeight": 300,
         "resizable": true,
+        "maximizable": true,
         "decorations": true,
-        "transparent": false,
+        "transparent": true,
         "visible": false
       }
     ],
