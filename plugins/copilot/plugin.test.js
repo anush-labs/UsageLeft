@@ -3,7 +3,7 @@ import { makePluginTestContext } from "../test-helpers.js";
 
 const loadPlugin = async () => {
   await import("./plugin.js");
-  return globalThis.__openusage_plugin;
+  return globalThis.__usageleft_plugin;
 };
 
 function makeUsageResponse(overrides = {}) {
@@ -30,7 +30,7 @@ function makeUsageResponse(overrides = {}) {
 
 function setKeychainToken(ctx, token) {
   ctx.host.keychain.readGenericPassword.mockImplementation((service) => {
-    if (service === "OpenUsage-copilot") return JSON.stringify({ token });
+    if (service === "UsageLeft-copilot") return JSON.stringify({ token });
     return null;
   });
 }
@@ -49,6 +49,13 @@ function setStateFileToken(ctx, token) {
   );
 }
 
+function setSelectedCopilotAccount(ctx, account) {
+  ctx.host.fs.writeText(
+    ctx.app.pluginDataDir + "/config.json",
+    JSON.stringify({ account }),
+  );
+}
+
 function mockUsageOk(ctx, body) {
   ctx.host.http.request.mockReturnValue({
     status: 200,
@@ -58,7 +65,7 @@ function mockUsageOk(ctx, body) {
 
 describe("copilot plugin", () => {
   beforeEach(() => {
-    delete globalThis.__openusage_plugin;
+    delete globalThis.__usageleft_plugin;
     if (vi.resetModules) vi.resetModules();
   });
 
@@ -68,7 +75,7 @@ describe("copilot plugin", () => {
     expect(() => plugin.probe(ctx)).toThrow("Not logged in. Run `gh auth login` first.");
   });
 
-  it("loads token from OpenUsage keychain", async () => {
+  it("loads token from UsageLeft keychain", async () => {
     const ctx = makePluginTestContext();
     setKeychainToken(ctx, "ghu_keychain");
     mockUsageOk(ctx);
@@ -116,7 +123,7 @@ describe("copilot plugin", () => {
   it("prefers keychain over gh-cli", async () => {
     const ctx = makePluginTestContext();
     ctx.host.keychain.readGenericPassword.mockImplementation((service) => {
-      if (service === "OpenUsage-copilot")
+      if (service === "UsageLeft-copilot")
         return JSON.stringify({ token: "ghu_keychain" });
       if (service === "gh:github.com") return "gho_ghcli";
       return null;
@@ -139,6 +146,65 @@ describe("copilot plugin", () => {
     expect(call.headers.Authorization).toBe("token ghu_keychain");
   });
 
+  it("uses selected GitHub account before cached or active tokens", async () => {
+    const ctx = makePluginTestContext();
+    setSelectedCopilotAccount(ctx, "user-b");
+    setKeychainToken(ctx, "tok_cached_a");
+    ctx.host.ghToken.mockImplementation((account) => {
+      if (account === "user-b") return "tok_user_b";
+      if (!account) return "tok_active_a";
+      throw new Error("unknown account");
+    });
+    ctx.host.http.request.mockImplementation((opts) => {
+      if (String(opts.url) === "https://api.github.com/user") {
+        return { status: 200, bodyText: JSON.stringify({ login: "user-b" }) };
+      }
+      return { status: 200, bodyText: JSON.stringify(makeUsageResponse()) };
+    });
+
+    const plugin = await loadPlugin();
+    const result = plugin.probe(ctx);
+
+    expect(ctx.host.ghToken).toHaveBeenCalledWith("user-b");
+    expect(ctx.host.ghToken).not.toHaveBeenCalledWith();
+    const usageCall = ctx.host.http.request.mock.calls[0][0];
+    expect(usageCall.headers.Authorization).toBe("token tok_user_b");
+    expect(result.lines[0]).toEqual({ type: "text", label: "Account", value: "user-b" });
+  });
+
+  it("does not fall back to active gh account when selected account is unavailable", async () => {
+    const ctx = makePluginTestContext();
+    setSelectedCopilotAccount(ctx, "user-b");
+    ctx.host.ghToken.mockImplementation((account) => {
+      if (account === "user-b") throw new Error("not logged in");
+      return "tok_active_a";
+    });
+
+    const plugin = await loadPlugin();
+    expect(() => plugin.probe(ctx)).toThrow(
+      "GitHub account user-b is not available",
+    );
+    expect(ctx.host.ghToken).toHaveBeenCalledTimes(1);
+    expect(ctx.host.ghToken).toHaveBeenCalledWith("user-b");
+  });
+
+  it("does not fall back to another account when selected account lacks Copilot access", async () => {
+    const ctx = makePluginTestContext();
+    setSelectedCopilotAccount(ctx, "user-b");
+    ctx.host.ghToken.mockImplementation((account) => {
+      if (account === "user-b") return "tok_user_b";
+      return "tok_active_a";
+    });
+    ctx.host.http.request.mockReturnValue({ status: 403, bodyText: "" });
+
+    const plugin = await loadPlugin();
+    expect(() => plugin.probe(ctx)).toThrow(
+      "No Copilot access or token invalid for user-b",
+    );
+    expect(ctx.host.ghToken).toHaveBeenCalledTimes(1);
+    expect(ctx.host.ghToken).toHaveBeenCalledWith("user-b");
+  });
+
   it("persists token from gh-cli to keychain and state file", async () => {
     const ctx = makePluginTestContext();
     setGhCliKeychain(ctx, "gho_persist");
@@ -146,7 +212,7 @@ describe("copilot plugin", () => {
     const plugin = await loadPlugin();
     plugin.probe(ctx);
     expect(ctx.host.keychain.writeGenericPassword).toHaveBeenCalledWith(
-      "OpenUsage-copilot",
+      "UsageLeft-copilot",
       JSON.stringify({ token: "gho_persist" }),
     );
     const stateFile = ctx.host.fs.readText(
@@ -155,7 +221,7 @@ describe("copilot plugin", () => {
     expect(JSON.parse(stateFile).token).toBe("gho_persist");
   });
 
-  it("does not persist token loaded from OpenUsage keychain", async () => {
+  it("does not persist token loaded from UsageLeft keychain", async () => {
     const ctx = makePluginTestContext();
     setKeychainToken(ctx, "ghu_already");
     mockUsageOk(ctx);
@@ -177,6 +243,35 @@ describe("copilot plugin", () => {
     expect(premium.limit).toBe(100);
     expect(chat).toBeTruthy();
     expect(chat.used).toBe(5); // 100 - 95
+  });
+
+  it("shows GitHub account username when available", async () => {
+    const ctx = makePluginTestContext();
+    setKeychainToken(ctx, "tok");
+    ctx.host.http.request.mockImplementation((opts) => {
+      if (String(opts.url) === "https://api.github.com/user") {
+        return { status: 200, bodyText: JSON.stringify({ login: "octocat" }) };
+      }
+      return { status: 200, bodyText: JSON.stringify(makeUsageResponse()) };
+    });
+    const plugin = await loadPlugin();
+    const result = plugin.probe(ctx);
+    expect(result.lines[0]).toEqual({ type: "text", label: "Account", value: "octocat" });
+    expect(result.lines.find((l) => l.label === "Premium")).toBeTruthy();
+  });
+
+  it("keeps status badge when username exists but usage data is missing", async () => {
+    const ctx = makePluginTestContext();
+    setKeychainToken(ctx, "tok");
+    ctx.host.http.request.mockImplementation((opts) => {
+      if (String(opts.url) === "https://api.github.com/user") {
+        return { status: 200, bodyText: JSON.stringify({ login: "octocat" }) };
+      }
+      return { status: 200, bodyText: JSON.stringify({ copilot_plan: "free" }) };
+    });
+    const plugin = await loadPlugin();
+    const result = plugin.probe(ctx);
+    expect(result.lines.map((line) => line.label)).toEqual(["Account", "Status"]);
   });
 
   it("renders only Premium when Chat is missing", async () => {
@@ -453,19 +548,15 @@ describe("copilot plugin", () => {
   it("retries with gh-cli token when cached keychain token is stale", async () => {
     const ctx = makePluginTestContext();
     let callCount = 0;
-    // First call returns stale keychain token, second call returns fresh gh-cli token
     ctx.host.keychain.readGenericPassword.mockImplementation((service) => {
-      if (service === "OpenUsage-copilot") {
+      if (service === "UsageLeft-copilot") {
         return JSON.stringify({ token: "stale_token" });
-      }
-      if (service === "gh:github.com") {
-        return "fresh_gh_token";
       }
       return null;
     });
-    // First request with stale token returns 401, second with fresh token succeeds
+    ctx.host.ghToken.mockReturnValue("fresh_gh_token");
     ctx.host.http.request.mockImplementation((opts) => {
-      callCount++;
+      if (String(opts.url).includes("copilot_internal")) callCount++;
       if (opts.headers.Authorization === "token stale_token") {
         return { status: 401, bodyText: "" };
       }
@@ -475,16 +566,14 @@ describe("copilot plugin", () => {
     const result = plugin.probe(ctx);
     expect(result.lines.find((l) => l.label === "Premium")).toBeTruthy();
     expect(callCount).toBe(2);
-    // Should have cleared the stale token
-    expect(ctx.host.keychain.deleteGenericPassword).toHaveBeenCalledWith("OpenUsage-copilot");
-    // Should have saved the fresh token
+    expect(ctx.host.keychain.deleteGenericPassword).toHaveBeenCalledWith("UsageLeft-copilot");
     expect(ctx.host.keychain.writeGenericPassword).toHaveBeenCalled();
   });
 
   it("throws when stale keychain token and no fallback available", async () => {
     const ctx = makePluginTestContext();
     ctx.host.keychain.readGenericPassword.mockImplementation((service) => {
-      if (service === "OpenUsage-copilot") {
+      if (service === "UsageLeft-copilot") {
         return JSON.stringify({ token: "stale_token" });
       }
       return null; // No gh-cli fallback
@@ -494,10 +583,10 @@ describe("copilot plugin", () => {
     expect(() => plugin.probe(ctx)).toThrow("Token invalid");
   });
 
-  it("falls back when OpenUsage keychain payload lacks token field", async () => {
+  it("falls back when UsageLeft keychain payload lacks token field", async () => {
     const ctx = makePluginTestContext();
     ctx.host.keychain.readGenericPassword.mockImplementation((service) => {
-      if (service === "OpenUsage-copilot") return JSON.stringify({ notToken: "x" });
+      if (service === "UsageLeft-copilot") return JSON.stringify({ notToken: "x" });
       if (service === "gh:github.com") return "gho_fallback";
       return null;
     });

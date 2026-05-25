@@ -1,7 +1,8 @@
 (function () {
-  const KEYCHAIN_SERVICE = "OpenUsage-copilot";
+  const KEYCHAIN_SERVICE = "UsageLeft-copilot";
   const GH_KEYCHAIN_SERVICE = "gh:github.com";
   const USAGE_URL = "https://api.github.com/copilot_internal/user";
+  const USER_URL = "https://api.github.com/user";
 
   function readJson(ctx, path) {
     try {
@@ -22,16 +23,29 @@
     }
   }
 
-  function saveToken(ctx, token) {
+  function saveToken(ctx, token, username) {
+    const payload = { token: token };
+    if (username) payload.username = username;
     try {
       ctx.host.keychain.writeGenericPassword(
         KEYCHAIN_SERVICE,
-        JSON.stringify({ token: token }),
+        JSON.stringify(payload),
       );
     } catch (e) {
       ctx.host.log.warn("keychain write failed: " + String(e));
     }
-    writeJson(ctx, ctx.app.pluginDataDir + "/auth.json", { token: token });
+    writeJson(ctx, ctx.app.pluginDataDir + "/auth.json", payload);
+  }
+
+  function normalizeAccount(value) {
+    if (typeof value !== "string") return null;
+    var trimmed = value.trim();
+    return trimmed ? trimmed : null;
+  }
+
+  function loadSelectedAccount(ctx) {
+    var data = readJson(ctx, ctx.app.pluginDataDir + "/config.json");
+    return normalizeAccount(data && data.account);
   }
 
   function clearCachedToken(ctx) {
@@ -49,12 +63,12 @@
       if (raw) {
         const parsed = ctx.util.tryParseJson(raw);
         if (parsed && parsed.token) {
-          ctx.host.log.info("token loaded from OpenUsage keychain");
-          return { token: parsed.token, source: "keychain" };
+          ctx.host.log.info("token loaded from UsageLeft keychain");
+          return { token: parsed.token, source: "keychain", username: parsed.username || null };
         }
       }
     } catch (e) {
-      ctx.host.log.info("OpenUsage keychain read failed: " + String(e));
+      ctx.host.log.info("UsageLeft keychain read failed: " + String(e));
     }
     return null;
   }
@@ -72,7 +86,7 @@
         }
         if (token) {
           ctx.host.log.info("token loaded from gh CLI keychain");
-          return { token: token, source: "gh-cli" };
+          return { token: token, source: "gh-cli", username: null };
         }
       }
     } catch (e) {
@@ -85,16 +99,102 @@
     const data = readJson(ctx, ctx.app.pluginDataDir + "/auth.json");
     if (data && data.token) {
       ctx.host.log.info("token loaded from state file");
-      return { token: data.token, source: "state" };
+      return { token: data.token, source: "state", username: data.username || null };
     }
     return null;
   }
 
-  function loadToken(ctx) {
+  function parseGhHostsYml(text) {
+    var lines = text.split(/\r?\n/)
+    var usernames = []
+    var phase = 0 // 0=find github.com, 1=find users:, 2=collect usernames
+    var usersIndent = -1
+    var usernameIndent = -1
+    for (var i = 0; i < lines.length; i++) {
+      var line = lines[i]
+      if (!line.trim() || line.trim().charAt(0) === "#") continue
+      var indent = 0
+      while (indent < line.length && (line[indent] === " " || line[indent] === "\t")) indent++
+      var trimmed = line.trim()
+      if (phase === 0) {
+        if (trimmed === "github.com:") phase = 1
+      } else if (phase === 1) {
+        if (indent === 0) break // left github.com block
+        if (trimmed.indexOf("user:") === 0) {
+          var user = normalizeAccount(trimmed.slice("user:".length))
+          if (user && usernames.indexOf(user) === -1) usernames.push(user)
+        }
+        if (trimmed === "users:") { usersIndent = indent; phase = 2 }
+      } else {
+        if (indent <= usersIndent) break // left users block
+        if (usernameIndent === -1) usernameIndent = indent
+        if (indent === usernameIndent && trimmed.endsWith(":")) {
+          var username = normalizeAccount(trimmed.slice(0, -1))
+          if (username && usernames.indexOf(username) === -1) usernames.push(username)
+        } else if (indent < usernameIndent) {
+          break
+        }
+      }
+    }
+    return usernames
+  }
+
+  function loadTokenFromSelectedAccount(ctx, account) {
+    try {
+      var token = ctx.host.ghToken(account)
+      if (token) {
+        ctx.host.log.info("token loaded from selected gh account: " + account)
+        return { token: token, source: "gh-command", username: account }
+      }
+    } catch (e) {
+      ctx.host.log.warn("selected gh account " + account + " token failed: " + String(e))
+    }
+    return null
+  }
+
+  function loadTokenFromGhCommand(ctx) {
+    // Try active account
+    try {
+      var token = ctx.host.ghToken()
+      if (token) {
+        ctx.host.log.info("token loaded from gh active account")
+        return { token: token, source: "gh-command", username: null }
+      }
+    } catch (e) {
+      ctx.host.log.info("gh active account token failed: " + String(e))
+    }
+    // Try all named accounts
+    try {
+      var hostsPath = "~/.config/gh/hosts.yml"
+      if (ctx.host.fs.exists(hostsPath)) {
+        var users = parseGhHostsYml(ctx.host.fs.readText(hostsPath))
+        for (var i = 0; i < users.length; i++) {
+          try {
+            var t = ctx.host.ghToken(users[i])
+            if (t) {
+              ctx.host.log.info("token loaded from gh account: " + users[i])
+              return { token: t, source: "gh-command", username: users[i] }
+            }
+          } catch (e) {
+            ctx.host.log.info("gh account " + users[i] + " failed: " + String(e))
+          }
+        }
+      }
+    } catch (e) {
+      ctx.host.log.warn("loadTokenFromGhCommand accounts scan failed: " + String(e))
+    }
+    return null
+  }
+
+  function loadToken(ctx, selectedAccount) {
+    if (selectedAccount) {
+      return loadTokenFromSelectedAccount(ctx, selectedAccount);
+    }
     return (
       loadTokenFromKeychain(ctx) ||
       loadTokenFromGhCli(ctx) ||
-      loadTokenFromStateFile(ctx)
+      loadTokenFromStateFile(ctx) ||
+      loadTokenFromGhCommand(ctx)
     );
   }
 
@@ -114,9 +214,55 @@
     });
   }
 
+  function fetchGithubUsername(ctx, token) {
+    try {
+      const resp = ctx.util.request({
+        method: "GET",
+        url: USER_URL,
+        headers: {
+          Authorization: "token " + token,
+          Accept: "application/json",
+          "User-Agent": "UsageLeft",
+          "X-Github-Api-Version": "2025-04-01",
+        },
+        timeoutMs: 10000,
+      });
+      if (resp.status < 200 || resp.status >= 300) {
+        ctx.host.log.warn("GitHub user request returned status: " + resp.status);
+        return null;
+      }
+      const data = ctx.util.tryParseJson(resp.bodyText);
+      if (data && typeof data.login === "string" && data.login.trim()) {
+        return data.login.trim();
+      }
+    } catch (e) {
+      ctx.host.log.warn("GitHub user request failed: " + String(e));
+    }
+    return null;
+  }
+
   function makeProgressLine(ctx, label, snapshot, resetDate) {
     if (!snapshot || typeof snapshot.percent_remaining !== "number")
       return null;
+
+    // Use real counts if both remaining and entitlement are available
+    const remaining = snapshot.remaining;
+    const entitlement = snapshot.entitlement;
+    const hasRealCounts = typeof remaining === "number" && typeof entitlement === "number" && entitlement > 0;
+
+    if (hasRealCounts) {
+      const used = entitlement - remaining;
+      return ctx.line.progress({
+        label: label,
+        used: used,
+        limit: entitlement,
+        format: { kind: "count", suffix: "req" },
+        resetsAt: ctx.util.toIso(resetDate),
+        periodDurationMs: 30 * 24 * 60 * 60 * 1000,
+      });
+    }
+
+    // Fallback: percent-based
     const usedPercent = Math.min(100, Math.max(0, 100 - snapshot.percent_remaining));
     return ctx.line.progress({
       label: label,
@@ -144,13 +290,18 @@
   }
 
   function probe(ctx) {
-    const cred = loadToken(ctx);
+    const selectedAccount = loadSelectedAccount(ctx);
+    const cred = loadToken(ctx, selectedAccount);
     if (!cred) {
+      if (selectedAccount) {
+        throw "GitHub account " + selectedAccount + " is not available. Run `gh auth login` for that account first.";
+      }
       throw "Not logged in. Run `gh auth login` first.";
     }
 
     let token = cred.token;
     let source = cred.source;
+    let username = cred.username || null;
 
     let resp;
     try {
@@ -161,24 +312,38 @@
     }
 
     if (resp.status === 401 || resp.status === 403) {
-      // If cached token is stale, clear it and try fallback sources
+      if (selectedAccount) {
+        throw "No Copilot access or token invalid for " + selectedAccount + ". Run `gh auth refresh` or `gh auth login` for that account.";
+      }
+      // Clear stale cached token and try all gh accounts sequentially
       if (source === "keychain") {
-        ctx.host.log.info("cached token invalid, trying fallback sources");
-        clearCachedToken(ctx);
-        const fallback = loadTokenFromGhCli(ctx);
-        if (fallback) {
-          try {
-            resp = fetchUsage(ctx, fallback.token);
-          } catch (e) {
-            ctx.host.log.error("fallback usage request exception: " + String(e));
-            throw "Usage request failed. Check your connection.";
+        ctx.host.log.info("cached token invalid, clearing and retrying")
+        clearCachedToken(ctx)
+      }
+      // Try every known gh account until one has Copilot access
+      var allAccounts = [null]
+      try {
+        var hostsPath = "~/.config/gh/hosts.yml"
+        if (ctx.host.fs.exists(hostsPath)) {
+          var ghUsers = parseGhHostsYml(ctx.host.fs.readText(hostsPath))
+          for (var gi = 0; gi < ghUsers.length; gi++) allAccounts.push(ghUsers[gi])
+        }
+      } catch (e) {}
+      for (var ai = 0; ai < allAccounts.length; ai++) {
+        try {
+          var ghTok = ctx.host.ghToken(allAccounts[ai])
+          if (!ghTok) continue
+          var tryResp = fetchUsage(ctx, ghTok)
+          if (tryResp.status >= 200 && tryResp.status < 300) {
+            resp = tryResp
+            token = ghTok
+            username = allAccounts[ai] || null
+            source = "gh-command"
+            saveToken(ctx, ghTok, username)
+            break
           }
-          if (resp.status >= 200 && resp.status < 300) {
-            // Fallback worked, persist the new token
-            saveToken(ctx, fallback.token);
-            token = fallback.token;
-            source = fallback.source;
-          }
+        } catch (e) {
+          ctx.host.log.info("gh account " + (allAccounts[ai] || "active") + " retry failed: " + String(e))
         }
       }
       // Still failing after retry
@@ -196,11 +361,6 @@
       );
     }
 
-    // Persist gh-cli token to OpenUsage keychain for future use
-    if (source === "gh-cli") {
-      saveToken(ctx, token);
-    }
-
     const data = ctx.util.tryParseJson(resp.bodyText);
     if (data === null) {
       throw "Usage response invalid. Try again later.";
@@ -208,11 +368,22 @@
 
     ctx.host.log.info("usage fetch succeeded");
 
+    username = fetchGithubUsername(ctx, token) || username;
+
+    // Persist gh tokens to UsageLeft state for future use.
+    if (source === "gh-cli" || source === "gh-command") {
+      saveToken(ctx, token, username);
+    }
+
     const lines = [];
     let plan = null;
     if (data.copilot_plan) {
       plan = ctx.fmt.planLabel(data.copilot_plan);
     }
+
+    const accountLine = username
+      ? ctx.line.text({ label: "Account", value: username })
+      : null;
 
     // Paid tier: quota_snapshots
     const snapshots = data.quota_snapshots;
@@ -257,8 +428,10 @@
       );
     }
 
+    if (accountLine) lines.unshift(accountLine);
+
     return { plan: plan, lines: lines };
   }
 
-  globalThis.__openusage_plugin = { id: "copilot", probe };
+  globalThis.__usageleft_plugin = { id: "copilot", probe };
 })();
