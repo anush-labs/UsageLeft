@@ -179,7 +179,7 @@ export function AgentDashboard({
 
                   <div className="mt-4">
                     <div className="mb-1.5 flex items-center justify-between">
-                      <span className="text-[10px] text-gray-600">Usage</span>
+                      <span className="text-[10px] text-gray-600">Used</span>
                       <span className="font-mono text-[10px] text-gray-500">
                         {Math.round(metric.fraction * 100)}%
                       </span>

@@ -31,10 +31,8 @@ export function useAppPluginViews({
       .map((id) => {
         const meta = metaById.get(id)
         if (!meta) return null
-        const overridenMeta: PluginMeta = {
-          ...meta,
-          brandColor: pluginSettings.customColors?.[id] ?? meta.brandColor,
-        }
+        // brandColor stays as the real brand color — customColor is tray-only
+        const overridenMeta: PluginMeta = { ...meta }
         const state =
           pluginStates[id] ?? { data: null, loading: false, error: null, lastManualRefreshAt: null, lastUpdatedAt: null }
         return { meta: overridenMeta, ...state }
@@ -55,7 +53,7 @@ export function useAppPluginViews({
         id: plugin.id,
         name: plugin.name,
         iconUrl: plugin.iconUrl,
-        brandColor: pluginSettings.customColors?.[plugin.id] ?? plugin.brandColor,
+        brandColor: plugin.brandColor,
       }))
   }, [pluginSettings, pluginsMeta])
 

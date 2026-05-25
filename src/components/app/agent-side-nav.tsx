@@ -11,15 +11,16 @@ type AgentSideNavProps = {
 export function AgentSideNav({ activeView, navPlugins, onViewChange }: AgentSideNavProps) {
   return (
     <div
-      className="flex w-14 shrink-0 flex-col items-center gap-1 overflow-y-auto border-r py-3 scrollbar-none"
+      className="flex w-14 shrink-0 flex-col items-center gap-2 overflow-y-auto border-r py-3 scrollbar-none"
       style={{
-        background: "rgba(8, 9, 18, 0.8)",
+        background: "rgba(8, 9, 18, 0.85)",
         backdropFilter: "blur(12px)",
         borderColor: "rgba(255,255,255,0.05)",
       }}
     >
       {navPlugins.map((plugin) => {
         const active = activeView === plugin.id
+        const color = plugin.brandColor ?? "#a855f7"
         return (
           <button
             key={plugin.id}
@@ -28,36 +29,34 @@ export function AgentSideNav({ activeView, navPlugins, onViewChange }: AgentSide
             title={plugin.name}
             aria-label={plugin.name}
             aria-pressed={active}
-            className={cn(
-              "group relative flex size-9 items-center justify-center rounded-xl transition-all duration-150",
-              active
-                ? "shadow-[0_0_14px_rgba(168,85,247,0.35)]"
-                : "hover:bg-white/5",
-            )}
-            style={
-              active
-                ? {
-                    background: `${plugin.brandColor}22`,
-                    border: `1px solid ${plugin.brandColor}55`,
-                  }
-                : { background: "transparent", border: "1px solid transparent" }
-            }
+            className="group relative flex items-center justify-center transition-all duration-150"
           >
-            {/* Active indicator bar */}
-            {active && (
+            {/* App icon square */}
+            <div
+              className="flex size-10 items-center justify-center rounded-2xl transition-all duration-150"
+              style={{
+                backgroundColor: color,
+                opacity: active ? 1 : 0.65,
+                boxShadow: active ? `0 0 16px ${color}88` : "none",
+                transform: active ? "scale(1.08)" : "scale(1)",
+              }}
+            >
               <span
                 aria-hidden
-                className="absolute inset-y-2 left-0 w-0.5 rounded-full"
-                style={{ backgroundColor: plugin.brandColor ?? "#a855f7" }}
+                className="size-5"
+                style={{
+                  backgroundColor: "#ffffff",
+                  WebkitMaskImage: `url(${plugin.iconUrl})`,
+                  WebkitMaskSize: "contain",
+                  WebkitMaskRepeat: "no-repeat",
+                  WebkitMaskPosition: "center",
+                  maskImage: `url(${plugin.iconUrl})`,
+                  maskSize: "contain",
+                  maskRepeat: "no-repeat",
+                  maskPosition: "center",
+                }}
               />
-            )}
-            <img
-              src={plugin.iconUrl}
-              alt=""
-              aria-hidden
-              className="size-5 object-contain"
-              style={{ opacity: active ? 1 : 0.6, transition: "opacity 0.15s" }}
-            />
+            </div>
             {/* Tooltip */}
             <span
               className="pointer-events-none absolute left-full ml-2 whitespace-nowrap rounded-lg border border-white/10 bg-[#0f1120]/95 px-2 py-1 text-xs font-medium text-white opacity-0 shadow-xl backdrop-blur-xl transition-opacity group-hover:opacity-100"
@@ -79,25 +78,22 @@ export function AgentSideNav({ activeView, navPlugins, onViewChange }: AgentSide
         title="Settings"
         aria-label="Settings"
         aria-pressed={activeView === "settings"}
-        className={cn(
-          "group relative flex size-9 items-center justify-center rounded-xl border transition-all duration-150",
-          activeView === "settings"
-            ? "border-violet-500/40 bg-violet-500/15 shadow-[0_0_14px_rgba(168,85,247,0.25)]"
-            : "border-transparent hover:bg-white/5",
-        )}
+        className="group relative flex items-center justify-center transition-all duration-150"
       >
-        {activeView === "settings" && (
-          <span
-            aria-hidden
-            className="absolute inset-y-2 left-0 w-0.5 rounded-full bg-violet-500"
-          />
-        )}
-        <Settings
+        <div
           className={cn(
-            "size-4 transition-colors",
-            activeView === "settings" ? "text-violet-400" : "text-gray-500 group-hover:text-gray-300",
+            "flex size-10 items-center justify-center rounded-2xl transition-all duration-150",
+            activeView === "settings"
+              ? "bg-violet-600 shadow-[0_0_16px_rgba(139,92,246,0.6)]"
+              : "bg-white/10 hover:bg-white/20",
           )}
-        />
+          style={{
+            opacity: activeView === "settings" ? 1 : 0.65,
+            transform: activeView === "settings" ? "scale(1.08)" : "scale(1)",
+          }}
+        >
+          <Settings className="size-4 text-white" />
+        </div>
         <span
           className="pointer-events-none absolute left-full ml-2 whitespace-nowrap rounded-lg border border-white/10 bg-[#0f1120]/95 px-2 py-1 text-xs font-medium text-white opacity-0 shadow-xl backdrop-blur-xl transition-opacity group-hover:opacity-100"
           aria-hidden
