@@ -1,0 +1,54 @@
+<svg width="1024" height="1024" viewBox="0 0 1024 1024" fill="none" xmlns="http://www.w3.org/2000/svg">
+  <defs>
+    <radialGradient id="bg" cx="50%" cy="45%" r="70%">
+      <stop offset="0%" stop-color="#15102A"/>
+      <stop offset="55%" stop-color="#080716"/>
+      <stop offset="100%" stop-color="#02030A"/>
+    </radialGradient>
+
+    <linearGradient id="progress" x1="280" y1="210" x2="760" y2="820" gradientUnits="userSpaceOnUse">
+      <stop offset="0%" stop-color="#6D4BFF"/>
+      <stop offset="42%" stop-color="#8E4DFF"/>
+      <stop offset="72%" stop-color="#C03BFF"/>
+      <stop offset="100%" stop-color="#F05CFF"/>
+    </linearGradient>
+
+    <linearGradient id="innerRing" x1="320" y1="260" x2="700" y2="760" gradientUnits="userSpaceOnUse">
+      <stop offset="0%" stop-color="#7B4DFF"/>
+      <stop offset="100%" stop-color="#D44DFF"/>
+    </linearGradient>
+
+    <filter id="softGlow" x="-35%" y="-35%" width="170%" height="170%">
+      <feGaussianBlur stdDeviation="10" result="blur"/>
+      <feColorMatrix in="blur" type="matrix" values="0 0 0 0 0.58  0 0 0 0 0.16  0 0 0 0 1  0 0 0 0.85 0" result="glow"/>
+      <feMerge>
+        <feMergeNode in="glow"/>
+        <feMergeNode in="SourceGraphic"/>
+      </feMerge>
+    </filter>
+
+    <filter id="dotGlow" x="-120%" y="-120%" width="340%" height="340%">
+      <feGaussianBlur stdDeviation="16" result="blur"/>
+      <feColorMatrix in="blur" type="matrix" values="0 0 0 0 0.75  0 0 0 0 0.2  0 0 0 0 1  0 0 0 1 0" result="glow"/>
+      <feMerge>
+        <feMergeNode in="glow"/>
+        <feMergeNode in="SourceGraphic"/>
+      </feMerge>
+    </filter>
+  </defs>
+
+  <rect width="1024" height="1024" rx="0" fill="url(#bg)"/>
+
+  <!-- faint outer usage track -->
+  <circle cx="512" cy="512" r="292" stroke="#5D32C8" stroke-opacity="0.26" stroke-width="10"/>
+
+  <!-- inner halo ring -->
+  <circle cx="512" cy="512" r="210" stroke="url(#innerRing)" stroke-width="6" stroke-opacity="0.95" filter="url(#softGlow)"/>
+
+  <!-- 75% filled progress arc, 25% left unfilled -->
+  <path d="M 512 220 A 292 292 0 1 1 305.525 718.475" stroke="url(#progress)" stroke-width="56" stroke-linecap="round" filter="url(#softGlow)"/>
+
+  <!-- endpoint dot -->
+  <circle cx="305.525" cy="718.475" r="28" fill="#D65BFF" filter="url(#dotGlow)"/>
+  <circle cx="305.525" cy="718.475" r="19" fill="#F0B8FF" fill-opacity="0.85"/>
+</svg>
