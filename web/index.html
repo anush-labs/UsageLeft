@@ -1347,6 +1347,14 @@
     // Fake interactivity for the dropdown
     const usageToggle = document.getElementById("usage-toggle");
     const statusDropdown = document.getElementById("status-dropdown-menu");
+
+    // "Show Dashboard" scrolls to the screenshots section
+    document.querySelector('#status-dropdown-menu .dropdown-item').addEventListener('click', (e) => {
+      e.stopPropagation();
+      statusDropdown.style.display = "none";
+      usageToggle.style.background = "transparent";
+      document.getElementById('screenshots').scrollIntoView({ behavior: 'smooth', block: 'start' });
+    });
     
     if (usageToggle && statusDropdown) {
       usageToggle.addEventListener("click", (e) => {
