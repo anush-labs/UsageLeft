@@ -7,8 +7,6 @@
   "icon": "icon.svg",
   "brandColor": "#4285F4",
   "lines": [
-    { "type": "progress", "label": "Gemini Pro", "scope": "overview", "primaryOrder": 1 },
-    { "type": "progress", "label": "Gemini Flash", "scope": "overview" },
-    { "type": "progress", "label": "Claude", "scope": "overview" }
+    { "type": "progress", "label": "Tracked", "scope": "overview", "primaryOrder": 1 }
   ]
 }

@@ -3,7 +3,7 @@ import { makeCtx } from "../test-helpers.js"
 
 const loadPlugin = async () => {
   await import("./plugin.js")
-  return globalThis.__openusage_plugin
+  return globalThis.__usageleft_plugin
 }
 
 const OAUTH_TOKEN_KEY = "antigravityUnifiedStateSync.oauthToken"
@@ -153,7 +153,7 @@ function makeOAuthSentinelB64(ctx, opts) {
 
 describe("antigravity plugin", () => {
   beforeEach(() => {
-    delete globalThis.__openusage_plugin
+    delete globalThis.__usageleft_plugin
     vi.resetModules()
   })
 
@@ -199,12 +199,114 @@ describe("antigravity plugin", () => {
     // No userTier in default fixture → falls back to planInfo.planName
     expect(result.plan).toBe("Pro")
 
-    // Model lines exist — 3 pool lines
+    // "Tracked" first, then individual models in sort order
     const labels = result.lines.map((l) => l.label)
-    expect(labels).toEqual(["Gemini Pro", "Gemini Flash", "Claude"])
+    expect(labels[0]).toBe("Tracked")
+    expect(labels).toContain("Gemini 3.1 Pro (High)")
+    expect(labels).toContain("Gemini 3.1 Pro (Low)")
+    expect(labels).toContain("Gemini 3 Flash")
+    expect(labels).toContain("Claude Opus 4.6 (Thinking)")
+    expect(labels).toContain("Claude Sonnet 4.6 (Thinking)")
   })
 
-  it("deduplicates models by normalized label (keeps worst-case fraction)", async () => {
+  it("can discover the ag process name fallback", async () => {
+    const ctx = makeCtx()
+    const discovery = makeDiscovery()
+    const response = makeUserStatusResponse()
+    setupLsMock(ctx, discovery, response)
+    ctx.host.ls.discover.mockImplementation((opts) => {
+      if (opts.processName === "ag") return discovery
+      return null
+    })
+
+    const plugin = await loadPlugin()
+    const result = plugin.probe(ctx)
+
+    expect(result.lines.find((l) => l.label === "Gemini 3.1 Pro (High)")).toBeTruthy()
+    expect(ctx.host.ls.discover).toHaveBeenCalledWith(expect.objectContaining({
+      processName: "ag",
+      markers: ["antigravity", "antigravity-ide", "agy", "ag"],
+    }))
+  })
+
+  it("discovers current Linux x64 language server flags", async () => {
+    const ctx = makeCtx()
+    const discovery = makeDiscovery()
+    const response = makeUserStatusResponse()
+    setupLsMock(ctx, discovery, response)
+    ctx.host.ls.discover.mockImplementation((opts) => {
+      if (
+        opts.processName === "language_server_linux_x64" &&
+        opts.csrfFlag === "-csrf_token" &&
+        opts.portFlag === "-extension_server_port"
+      ) {
+        return discovery
+      }
+      return null
+    })
+
+    const plugin = await loadPlugin()
+    const result = plugin.probe(ctx)
+
+    expect(result.lines.find((l) => l.label === "Gemini 3.1 Pro (High)")).toBeTruthy()
+    expect(ctx.host.ls.discover).toHaveBeenCalledWith(expect.objectContaining({
+      processName: "language_server_linux_x64",
+      csrfFlag: "-csrf_token",
+      portFlag: "-extension_server_port",
+    }))
+  })
+
+  it("discovers Antigravity CLI ports from current logs without csrf", async () => {
+    const ctx = makeCtx()
+    const response = makeUserStatusResponse()
+    ctx.host.ls.discover.mockReturnValue(null)
+    ctx.host.fs.writeText(
+      "~/.gemini/antigravity-cli/log/cli-20260523_191206.log",
+      [
+        "Starting language server process with pid 3467664",
+        "Language server listening on random port at 34681 for HTTPS (gRPC)",
+        "Language server listening on random port at 35821 for HTTP",
+      ].join("\n")
+    )
+    ctx.host.http.request.mockImplementation((opts) => {
+      expect(opts.headers["x-codeium-csrf-token"]).toBeUndefined()
+      if (String(opts.url).startsWith("https://127.0.0.1:35821/")) {
+        throw new Error("tls mismatch")
+      }
+      if (String(opts.url).includes("GetUnleashData")) {
+        return { status: 200, bodyText: "{}" }
+      }
+      return { status: 200, bodyText: JSON.stringify(response) }
+    })
+
+    const plugin = await loadPlugin()
+    const result = plugin.probe(ctx)
+
+    expect(result.lines.find((l) => l.label === "Gemini 3.1 Pro (High)")).toBeTruthy()
+    expect(ctx.host.http.request).toHaveBeenCalledWith(expect.objectContaining({
+      url: "http://127.0.0.1:35821/exa.language_server_pb.LanguageServerService/GetUserStatus",
+    }))
+  })
+
+  it("checks current Antigravity IDE state DB path", async () => {
+    const ctx = makeCtx()
+    const futureExpiry = Math.floor(Date.now() / 1000) + 3600
+    setupSqliteMock(ctx, makeOAuthSentinelB64(ctx, { accessToken: "ya29.test-token", refreshToken: "1//refresh", expirySeconds: futureExpiry }))
+    ctx.host.ls.discover.mockReturnValue(null)
+    ctx.host.http.request.mockImplementation((opts) => {
+      if (String(opts.url).includes("fetchAvailableModels")) {
+        return { status: 200, bodyText: JSON.stringify(makeCloudCodeResponse()) }
+      }
+      return { status: 500, bodyText: "" }
+    })
+
+    const plugin = await loadPlugin()
+    plugin.probe(ctx)
+
+    expect(ctx.host.sqlite.query.mock.calls[0][0]).toBe("~/.config/antigravity-ide/User/globalStorage/state.vscdb")
+  })
+
+  it("shows each model as a separate line (no deduplication)", async () => {
     const ctx = makeCtx()
     const discovery = makeDiscovery()
     const response = makeUserStatusResponse()
@@ -213,10 +315,13 @@ describe("antigravity plugin", () => {
     const plugin = await loadPlugin()
     const result = plugin.probe(ctx)
 
-    // Both Gemini 3.1 Pro variants have frac=0.8 → used = 20%
-    const pro = result.lines.find((l) => l.label === "Gemini Pro")
-    expect(pro).toBeTruthy()
-    expect(pro.used).toBe(20) // (1 - 0.8) * 100
+    // Both Gemini 3.1 Pro variants appear individually
+    const proHigh = result.lines.find((l) => l.label === "Gemini 3.1 Pro (High)")
+    const proLow = result.lines.find((l) => l.label === "Gemini 3.1 Pro (Low)")
+    expect(proHigh).toBeTruthy()
+    expect(proLow).toBeTruthy()
+    expect(proHigh.used).toBe(20) // (1 - 0.8) * 100
+    expect(proLow.used).toBe(20) // (1 - 0.8) * 100
   })
 
   it("orders: Gemini (Pro, Flash), Claude (Opus, Sonnet), then others", async () => {
@@ -229,8 +334,13 @@ describe("antigravity plugin", () => {
     const result = plugin.probe(ctx)
 
     const labels = result.lines.map((l) => l.label)
-
-    expect(labels).toEqual(["Gemini Pro", "Gemini Flash", "Claude"])
+    expect(labels[0]).toBe("Tracked")
+    // Gemini Pro variants before Flash
+    expect(labels.indexOf("Gemini 3.1 Pro (High)")).toBeLessThan(labels.indexOf("Gemini 3 Flash"))
+    // Claude Opus before Sonnet
+    expect(labels.indexOf("Claude Opus 4.6 (Thinking)")).toBeLessThan(labels.indexOf("Claude Sonnet 4.6 (Thinking)"))
+    // Claude before GPT
+    expect(labels.indexOf("Claude Sonnet 4.6 (Thinking)")).toBeLessThan(labels.indexOf("GPT-OSS 120B (Medium)"))
   })
 
   it("falls back to GetCommandModelConfigs when GetUserStatus fails", async () => {
@@ -265,20 +375,24 @@ describe("antigravity plugin", () => {
 
     expect(result.plan).toBeNull()
 
-    // Model lines present
-    const pro = result.lines.find((l) => l.label === "Gemini Pro")
+    const pro = result.lines.find((l) => l.label === "Gemini 3 Pro (High)")
     expect(pro).toBeTruthy()
     expect(pro.used).toBe(40) // (1 - 0.6) * 100
   })
 
-  it("uses extension port as fallback when all ports fail probing", async () => {
+  it("probes extension port when lsof ports fail", async () => {
     const ctx = makeCtx()
     ctx.host.ls.discover.mockReturnValue(makeDiscovery({ ports: [99999], extensionPort: 42010 }))
 
     let usedPort = null
+    const probed = []
     ctx.host.http.request.mockImplementation((opts) => {
       const url = String(opts.url)
-      if (url.includes("GetUnleashData") && url.includes("99999")) {
+      if (url.includes("GetUnleashData")) {
+        const port = parseInt(url.match(/:(\d+)\//)[1])
+        const scheme = url.startsWith("https") ? "https" : "http"
+        probed.push({ port, scheme })
+        if (port === 42010 && scheme === "http") return { status: 200, bodyText: "{}" }
         throw new Error("refused")
       }
       if (url.includes("GetUserStatus")) {
@@ -294,6 +408,12 @@ describe("antigravity plugin", () => {
     const plugin = await loadPlugin()
     const result = plugin.probe(ctx)
     expect(usedPort).toBe(42010)
+    expect(probed).toEqual([
+      { port: 99999, scheme: "https" },
+      { port: 99999, scheme: "http" },
+      { port: 42010, scheme: "https" },
+      { port: 42010, scheme: "http" },
+    ])
     expect(result.lines.length).toBeGreaterThan(0)
   })
 
@@ -310,15 +430,15 @@ describe("antigravity plugin", () => {
 
     const plugin = await loadPlugin()
     const result = plugin.probe(ctx)
-    const claude = result.lines.find((l) => l.label === "Claude")
+    const claude = result.lines.find((l) => l.label === "Claude Opus 4.6 (Thinking)")
     expect(claude).toBeTruthy()
     expect(claude.used).toBe(100)
     expect(claude.limit).toBe(100)
     expect(claude.resetsAt).toBeUndefined()
-    expect(result.lines.find((l) => l.label === "Gemini Pro")).toBeTruthy()
+    expect(result.lines.find((l) => l.label === "Gemini 3 Pro (High)")).toBeTruthy()
   })
 
-  it("dedup picks depleted variant (no quotaInfo) over non-depleted sibling", async () => {
+  it("shows both model variants separately, depleted variant shows 100% used", async () => {
     const ctx = makeCtx()
     const discovery = makeDiscovery()
     const response = makeUserStatusResponse({
@@ -331,10 +451,13 @@ describe("antigravity plugin", () => {
 
     const plugin = await loadPlugin()
     const result = plugin.probe(ctx)
-    const pro = result.lines.find((l) => l.label === "Gemini Pro")
-    expect(pro).toBeTruthy()
-    expect(pro.used).toBe(100)
-    expect(pro.resetsAt).toBeUndefined()
+    const proHigh = result.lines.find((l) => l.label === "Gemini 3 Pro (High)")
+    expect(proHigh).toBeTruthy()
+    expect(proHigh.used).toBe(25) // (1 - 0.75) * 100
+    const proLow = result.lines.find((l) => l.label === "Gemini 3 Pro (Low)")
+    expect(proLow).toBeTruthy()
+    expect(proLow.used).toBe(100) // no quotaInfo → depleted
+    expect(proLow.resetsAt).toBeUndefined()
   })
 
   it("returns lines when all models are depleted (no quotaInfo)", async () => {
@@ -350,9 +473,8 @@ describe("antigravity plugin", () => {
 
     const plugin = await loadPlugin()
     const result = plugin.probe(ctx)
-    expect(result).toBeTruthy()
     const labels = result.lines.map((l) => l.label)
-    expect(labels).toEqual(["Gemini Pro", "Claude"])
+    expect(labels).toEqual(["Tracked", "Gemini 3 Pro (High)", "Claude Opus 4.6 (Thinking)"])
     expect(result.lines.every((l) => l.used === 100)).toBe(true)
   })
 
@@ -370,8 +492,9 @@ describe("antigravity plugin", () => {
 
     const plugin = await loadPlugin()
     const result = plugin.probe(ctx)
-    expect(result.lines.length).toBe(1)
-    expect(result.lines[0].label).toBe("Gemini Pro")
+    expect(result.lines.length).toBe(2) // "Tracked" + "Gemini 3 Pro (High)"
+    expect(result.lines[0].label).toBe("Tracked")
+    expect(result.lines[1].label).toBe("Gemini 3 Pro (High)")
   })
 
   it("includes resetsAt on model lines", async () => {
@@ -382,7 +505,7 @@ describe("antigravity plugin", () => {
 
     const plugin = await loadPlugin()
     const result = plugin.probe(ctx)
-    const pro = result.lines.find((l) => l.label === "Gemini Pro")
+    const pro = result.lines.find((l) => l.label === "Gemini 3.1 Pro (High)")
     expect(pro.resetsAt).toBe("2026-02-08T09:10:56Z")
   })
 
@@ -399,8 +522,8 @@ describe("antigravity plugin", () => {
 
     const plugin = await loadPlugin()
     const result = plugin.probe(ctx)
-    const over = result.lines.find((l) => l.label === "Gemini Pro")
-    const neg = result.lines.find((l) => l.label === "Gemini Flash")
+    const over = result.lines.find((l) => l.label === "Gemini Pro (Over)")
+    const neg = result.lines.find((l) => l.label === "Gemini Flash (Neg)")
     expect(over.used).toBe(0) // clamped to 1.0 → 0% used
     expect(neg.used).toBe(100) // clamped to 0.0 → 100% used
   })
@@ -417,7 +540,7 @@ describe("antigravity plugin", () => {
 
     const plugin = await loadPlugin()
     const result = plugin.probe(ctx)
-    const line = result.lines.find((l) => l.label === "Gemini Pro")
+    const line = result.lines.find((l) => l.label === "Gemini Pro (No Reset)")
     expect(line).toBeTruthy()
     expect(line.used).toBe(50)
     expect(line.resetsAt).toBeUndefined()
@@ -498,8 +621,70 @@ describe("antigravity plugin", () => {
 
     expect(result.plan).toBeNull()
     const labels = result.lines.map((l) => l.label)
-    expect(labels).toContain("Gemini Pro")
-    expect(labels).toContain("Claude")
+    expect(labels).toContain("Gemini 3 Pro")
+    expect(labels).toContain("Claude Sonnet 4.5")
+  })
+
+  it("falls back to Cloud Code when CLI log ports are stale", async () => {
+    const ctx = makeCtx()
+    ctx.host.ls.discover.mockReturnValue(null)
+    ctx.host.fs.writeText(
+      "~/.gemini/oauth_creds.json",
+      JSON.stringify({
+        access_token: "ya29.test-token",
+        refresh_token: "1//refresh",
+        expiry_date: Date.now() + 3600 * 1000,
+      })
+    )
+    ctx.host.fs.writeText(
+      "~/.gemini/antigravity-cli/log/cli-20260523_191206.log",
+      [
+        "Starting language server process with pid 3467664",
+        "Language server listening on random port at 34681 for HTTPS (gRPC)",
+        "Language server listening on random port at 35821 for HTTP",
+      ].join("\n")
+    )
+
+    ctx.host.http.request.mockImplementation((opts) => {
+      const url = String(opts.url)
+      if (url.includes("127.0.0.1")) throw new Error("connection refused")
+      if (url.includes("fetchAvailableModels")) {
+        return { status: 200, bodyText: JSON.stringify(makeCloudCodeResponse()) }
+      }
+      return { status: 500, bodyText: "" }
+    })
+
+    const plugin = await loadPlugin()
+    const result = plugin.probe(ctx)
+
+    const labels = result.lines.map((l) => l.label)
+    expect(labels).toContain("Gemini 3 Pro")
+    expect(labels).toContain("Claude Sonnet 4.5")
+  })
+
+  it("falls back to Cloud Code when LS model config call throws", async () => {
+    const ctx = makeCtx()
+    const futureExpiry = Math.floor(Date.now() / 1000) + 3600
+    setupSqliteMock(ctx, makeOAuthSentinelB64(ctx, { accessToken: "ya29.test-token", refreshToken: "1//refresh", expirySeconds: futureExpiry }))
+    ctx.host.ls.discover.mockReturnValue(makeDiscovery({ ports: [42001], extensionPort: null }))
+
+    ctx.host.http.request.mockImplementation((opts) => {
+      const url = String(opts.url)
+      if (url.includes("GetUnleashData")) return { status: 200, bodyText: "{}" }
+      if (url.includes("GetUserStatus")) throw new Error("connection reset")
+      if (url.includes("GetCommandModelConfigs")) throw new Error("connection reset")
+      if (url.includes("fetchAvailableModels")) {
+        return { status: 200, bodyText: JSON.stringify(makeCloudCodeResponse()) }
+      }
+      return { status: 500, bodyText: "" }
+    })
+
+    const plugin = await loadPlugin()
+    const result = plugin.probe(ctx)
+
+    const labels = result.lines.map((l) => l.label)
+    expect(labels).toContain("Gemini 3 Pro")
+    expect(labels).toContain("Claude Sonnet 4.5")
   })
 
   it("Cloud Code sends correct Authorization header with DB token", async () => {
@@ -602,7 +787,7 @@ describe("antigravity plugin", () => {
     const plugin = await loadPlugin()
     const result = plugin.probe(ctx)
 
-    const pro = result.lines.find((l) => l.label === "Gemini Pro")
+    const pro = result.lines.find((l) => l.label === "Gemini 3 Pro (High)")
     expect(pro).toBeTruthy()
     expect(pro.used).toBe(30)
   })
@@ -664,12 +849,12 @@ describe("antigravity plugin", () => {
     const plugin = await loadPlugin()
     const result = plugin.probe(ctx)
 
-    const noQuota = result.lines.find((l) => l.label === "Gemini Flash")
+    const noQuota = result.lines.find((l) => l.label === "Gemini Flash (No Quota)")
     expect(noQuota).toBeTruthy()
     expect(noQuota.used).toBe(100)
     expect(noQuota.limit).toBe(100)
     expect(noQuota.resetsAt).toBeUndefined()
-    expect(result.lines.find((l) => l.label === "Gemini Pro")).toBeTruthy()
+    expect(result.lines.find((l) => l.label === "Gemini 3 Pro")).toBeTruthy()
   })
 
   it("decodes protobuf tokens from SQLite", async () => {
@@ -1052,7 +1237,7 @@ describe("antigravity plugin", () => {
     const result = plugin.probe(ctx)
 
     const labels = result.lines.map((l) => l.label)
-    expect(labels).toContain("Gemini Flash")
+    expect(labels).toContain("Gemini 3 Flash")
     expect(labels).not.toContain("chat_20706")
     expect(labels).not.toContain("MODEL_CHAT_20706")
   })
@@ -1094,7 +1279,7 @@ describe("antigravity plugin", () => {
     const result = plugin.probe(ctx)
 
     const labels = result.lines.map((l) => l.label)
-    expect(labels).toEqual(["Gemini Pro"])
+    expect(labels).toEqual(["Tracked", "Gemini 3 Pro"])
   })
 
   it("Cloud Code skips blacklisted model IDs", async () => {
@@ -1135,7 +1320,7 @@ describe("antigravity plugin", () => {
     const result = plugin.probe(ctx)
 
     const labels = result.lines.map((l) => l.label)
-    expect(labels).toEqual(["Claude"])
+    expect(labels).toEqual(["Tracked", "Claude Sonnet 4.5"])
   })
 
   it("Cloud Code keeps non-blacklisted models with valid displayName", async () => {
@@ -1176,7 +1361,7 @@ describe("antigravity plugin", () => {
     const result = plugin.probe(ctx)
 
     const labels = result.lines.map((l) => l.label)
-    expect(labels).toEqual(["Gemini Pro", "Claude"])
+    expect(labels).toEqual(["Tracked", "Gemini 3 Pro (High)", "Claude Opus 4.6 (Thinking)", "GPT-OSS 120B (Medium)"])
   })
 
   it("LS filters out blacklisted model IDs (Claude Opus 4.5)", async () => {
@@ -1207,7 +1392,7 @@ describe("antigravity plugin", () => {
     const result = plugin.probe(ctx)
 
     const labels = result.lines.map((l) => l.label)
-    expect(labels).toEqual(["Gemini Pro", "Claude"])
+    expect(labels).toEqual(["Tracked", "Gemini 3 Pro (High)", "Claude Opus 4.6 (Thinking)"])
   })
 
   it("LS still takes priority over Cloud Code with DB tokens (no regression)", async () => {
@@ -1310,7 +1495,10 @@ describe("antigravity plugin", () => {
 
     expect(result.plan).toBe("Google AI Ultra")
     const labels = result.lines.map((l) => l.label)
-    expect(labels).toEqual(["Gemini Pro", "Gemini Flash", "Claude"])
+    expect(labels[0]).toBe("Tracked")
+    expect(labels).toContain("Gemini 3.1 Pro (High)")
+    expect(labels).toContain("Gemini 3 Flash")
+    expect(labels).toContain("Claude Opus 4.6 (Thinking)")
   })
 
   it("falls back to planInfo.planName when userTier is absent", async () => {

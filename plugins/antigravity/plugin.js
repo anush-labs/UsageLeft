@@ -1,9 +1,18 @@
 (function () {
   var LS_SERVICE = "exa.language_server_pb.LanguageServerService"
-  var STATE_DB = "~/Library/Application Support/Antigravity/User/globalStorage/state.vscdb"
+  var STATE_DB_PATHS = [
+    "~/.config/antigravity-ide/User/globalStorage/state.vscdb",
+    "~/.config/antigravity/User/globalStorage/state.vscdb",
+    "~/.config/Antigravity/User/globalStorage/state.vscdb",
+    "~/Library/Application Support/Antigravity/User/globalStorage/state.vscdb",
+  ]
   var CLOUD_CODE_URLS = [
     "https://daily-cloudcode-pa.googleapis.com",
     "https://cloudcode-pa.googleapis.com",
+  ]
+  var CLI_LOG_DIRS = [
+    "~/.gemini/antigravity-cli/log",
+    "~/.gemini/antigravity-cli",
   ]
   var FETCH_MODELS_PATH = "/v1internal:fetchAvailableModels"
   var GOOGLE_OAUTH_URL = "https://oauth2.googleapis.com/token"
@@ -93,29 +102,31 @@
   }
 
   function loadOAuthTokens(ctx) {
-    try {
-      var rows = ctx.host.sqlite.query(
-        STATE_DB,
-        "SELECT value FROM ItemTable WHERE key = '" + OAUTH_TOKEN_KEY + "' LIMIT 1"
-      )
-      var parsed = ctx.util.tryParseJson(rows)
-      if (!parsed || !parsed.length || !parsed[0].value) return null
-      var inner = unwrapOAuthSentinel(ctx, parsed[0].value)
-      if (!inner) return null
-      var fields = readFields(inner)
-      var accessToken = (fields[1] && fields[1].type === 2) ? fields[1].data : null
-      var refreshToken = (fields[3] && fields[3].type === 2) ? fields[3].data : null
-      var expirySeconds = null
-      if (fields[4] && fields[4].type === 2) {
-        var ts = readFields(fields[4].data)
-        if (ts[1] && ts[1].type === 0) expirySeconds = ts[1].value
+    for (var i = 0; i < STATE_DB_PATHS.length; i++) {
+      try {
+        var rows = ctx.host.sqlite.query(
+          STATE_DB_PATHS[i],
+          "SELECT value FROM ItemTable WHERE key = '" + OAUTH_TOKEN_KEY + "' LIMIT 1"
+        )
+        var parsed = ctx.util.tryParseJson(rows)
+        if (!parsed || !parsed.length || !parsed[0].value) continue
+        var inner = unwrapOAuthSentinel(ctx, parsed[0].value)
+        if (!inner) continue
+        var fields = readFields(inner)
+        var accessToken = (fields[1] && fields[1].type === 2) ? fields[1].data : null
+        var refreshToken = (fields[3] && fields[3].type === 2) ? fields[3].data : null
+        var expirySeconds = null
+        if (fields[4] && fields[4].type === 2) {
+          var ts = readFields(fields[4].data)
+          if (ts[1] && ts[1].type === 0) expirySeconds = ts[1].value
+        }
+        if (!accessToken && !refreshToken) continue
+        return { accessToken: accessToken, refreshToken: refreshToken, expirySeconds: expirySeconds }
+      } catch (e) {
+        ctx.host.log.warn("failed to read unified oauth token from " + STATE_DB_PATHS[i] + ": " + String(e))
       }
-      if (!accessToken && !refreshToken) return null
-      return { accessToken: accessToken, refreshToken: refreshToken, expirySeconds: expirySeconds }
-    } catch (e) {
-      ctx.host.log.warn("failed to read unified oauth token: " + String(e))
-      return null
     }
+    return null
   }
 
   // --- Google OAuth token refresh ---
@@ -156,6 +167,26 @@
     }
   }
 
+  var GEMINI_CLI_CREDS_PATH = "~/.gemini/oauth_creds.json"
+
+  function loadGeminiCliTokens(ctx) {
+    try {
+      if (!ctx.host.fs.exists(GEMINI_CLI_CREDS_PATH)) return null
+      var data = ctx.util.tryParseJson(ctx.host.fs.readText(GEMINI_CLI_CREDS_PATH))
+      if (!data) return null
+      var accessToken = data.access_token || null
+      var refreshToken = data.refresh_token || null
+      // expiry_date is milliseconds epoch
+      var expirySeconds = (typeof data.expiry_date === "number") ? Math.floor(data.expiry_date / 1000) : null
+      if (!accessToken && !refreshToken) return null
+      ctx.host.log.info("loaded tokens from Gemini CLI creds file")
+      return { accessToken: accessToken, refreshToken: refreshToken, expirySeconds: expirySeconds }
+    } catch (e) {
+      ctx.host.log.warn("loadGeminiCliTokens failed: " + String(e))
+      return null
+    }
+  }
+
   // --- Token cache ---
 
   function loadCachedToken(ctx) {
@@ -186,24 +217,85 @@
 
   // --- LS discovery ---
 
+  function parseCliLogDiscovery(text) {
+    var httpPorts = []
+    var httpsPorts = []
+    var seen = {}
+    var match
+    var portRe = /Language server listening on random port at ([0-9]+) for (HTTPS|HTTP)/g
+    while ((match = portRe.exec(String(text || ""))) !== null) {
+      var port = Number(match[1])
+      if (!port || port < 1 || port > 65535 || seen[port]) continue
+      seen[port] = true
+      if (match[2] === "HTTP") httpPorts.push(port)
+      else httpsPorts.push(port)
+    }
+    var ports = httpPorts.concat(httpsPorts)
+    if (ports.length === 0) return null
+    return { pid: null, csrf: null, ports: ports, extensionPort: httpPorts[0] || null }
+  }
+
+  function discoverCliLogLs(ctx) {
+    for (var i = 0; i < CLI_LOG_DIRS.length; i++) {
+      var dir = CLI_LOG_DIRS[i]
+      try {
+        if (!ctx.host.fs.exists(dir)) continue
+        var names = ctx.host.fs.listDir(dir)
+        names.sort(function (a, b) { return a < b ? 1 : a > b ? -1 : 0 })
+        var checked = 0
+        for (var j = 0; j < names.length && checked < 8; j++) {
+          var name = String(names[j] || "")
+          if (name !== "cli.log" && !/\.log$/.test(name)) continue
+          checked += 1
+          var result = parseCliLogDiscovery(ctx.host.fs.readText(dir + "/" + name))
+          if (result) {
+            ctx.host.log.info("discovered Antigravity CLI language server ports from " + name)
+            return result
+          }
+        }
+      } catch (e) {
+        ctx.host.log.warn("failed to discover Antigravity CLI logs in " + dir + ": " + String(e))
+      }
+    }
+    return null
+  }
+
   function discoverLs(ctx) {
-    return ctx.host.ls.discover({
-      processName: "language_server_macos",
-      markers: ["antigravity"],
-      csrfFlag: "--csrf_token",
-      portFlag: "--extension_server_port",
-    })
+    var processNames = [
+      "language_server_linux_x64",
+      "language_server_linux",
+      "language_server_linux_amd64",
+      "language_server_macos",
+      "agy",
+      "ag",
+      "antigravity",
+    ]
+    for (var i = 0; i < processNames.length; i++) {
+      var result = ctx.host.ls.discover({
+        processName: processNames[i],
+        markers: ["antigravity", "antigravity-ide", "agy", "ag"],
+        csrfFlag: "-csrf_token",
+        portFlag: "-extension_server_port",
+      })
+      if (result) return result
+    }
+    return discoverCliLogLs(ctx)
+  }
+
+  function lsHeaders(csrf) {
+    var headers = {
+      "Content-Type": "application/json",
+      "Connect-Protocol-Version": "1",
+    }
+    if (csrf) headers["x-codeium-csrf-token"] = csrf
+    return headers
   }
 
   function probePort(ctx, scheme, port, csrf) {
     ctx.host.http.request({
       method: "POST",
       url: scheme + "://127.0.0.1:" + port + "/" + LS_SERVICE + "/GetUnleashData",
-      headers: {
-        "Content-Type": "application/json",
-        "Connect-Protocol-Version": "1",
-        "x-codeium-csrf-token": csrf,
-      },
+      headers: lsHeaders(csrf),
       bodyText: JSON.stringify({
         context: {
           properties: {
@@ -223,7 +315,10 @@
   }
 
   function findWorkingPort(ctx, discovery) {
-    var ports = discovery.ports || []
+    var ports = (discovery.ports || []).slice()
+    if (discovery.extensionPort && ports.indexOf(discovery.extensionPort) === -1) {
+      ports.push(discovery.extensionPort)
+    }
     for (var i = 0; i < ports.length; i++) {
       var port = ports[i]
       // Try HTTPS first (LS may use self-signed cert), then HTTP
@@ -231,7 +326,6 @@
       try { if (probePort(ctx, "http", port, discovery.csrf)) return { port: port, scheme: "http" } } catch (e) { /* ignore */ }
       ctx.host.log.info("port " + port + " probe failed on both schemes")
     }
-    if (discovery.extensionPort) return { port: discovery.extensionPort, scheme: "http" }
     return null
   }
 
@@ -239,11 +333,7 @@
     var resp = ctx.host.http.request({
       method: "POST",
       url: scheme + "://127.0.0.1:" + port + "/" + LS_SERVICE + "/" + method,
-      headers: {
-        "Content-Type": "application/json",
-        "Connect-Protocol-Version": "1",
-        "x-codeium-csrf-token": csrf,
-      },
+      headers: lsHeaders(csrf),
       bodyText: JSON.stringify(body || {}),
       timeoutMs: 10000,
       dangerouslyIgnoreTls: scheme === "https",
@@ -255,24 +345,10 @@
     return ctx.util.tryParseJson(resp.bodyText)
   }
 
-  // --- Line builders ---
-
-  function normalizeLabel(label) {
-    // "Gemini 3 Pro (High)" -> "Gemini 3 Pro"
-    return label.replace(/\s*\([^)]*\)\s*$/, "").trim()
-  }
-
-  function poolLabel(normalizedLabel) {
-    var lower = normalizedLabel.toLowerCase()
-    if (lower.indexOf("gemini") !== -1 && lower.indexOf("pro") !== -1) return "Gemini Pro"
-    if (lower.indexOf("gemini") !== -1 && lower.indexOf("flash") !== -1) return "Gemini Flash"
-    // All non-Gemini models (Claude, GPT-OSS, etc.) share a single quota pool
-    return "Claude"
-  }
+  // --- Line builders (per-model, no pooling) ---
 
   function modelSortKey(label) {
     var lower = label.toLowerCase()
-    // Gemini Pro variants first, then other Gemini, then Claude Opus, then other Claude, then rest
     if (lower.indexOf("gemini") !== -1 && lower.indexOf("pro") !== -1) return "0a_" + label
     if (lower.indexOf("gemini") !== -1) return "0b_" + label
     if (lower.indexOf("claude") !== -1 && lower.indexOf("opus") !== -1) return "1a_" + label
@@ -282,53 +358,96 @@
 
   var QUOTA_PERIOD_MS = 5 * 60 * 60 * 1000 // 5 hours
 
-  function modelLine(ctx, label, remainingFraction, resetTime) {
+  function modelLine(ctx, label, remainingFraction, resetTime, color) {
     var clamped = Math.max(0, Math.min(1, remainingFraction))
     var used = Math.round((1 - clamped) * 100)
-    return ctx.line.progress({
+    var opts = {
       label: label,
       used: used,
       limit: 100,
       format: { kind: "percent" },
-      resetsAt: resetTime || undefined,
       periodDurationMs: QUOTA_PERIOD_MS,
-    })
+    }
+    if (resetTime) opts.resetsAt = resetTime
+    if (color) opts.color = color
+    return ctx.line.progress(opts)
   }
 
-  function buildModelLines(ctx, configs) {
-    var deduped = {}
+  function loadTrackedModel(ctx) {
+    var path = ctx.app.pluginDataDir + "/config.json"
+    try {
+      if (!ctx.host.fs.exists(path)) return null
+      var data = ctx.util.tryParseJson(ctx.host.fs.readText(path))
+      return (data && typeof data.trackedModel === "string") ? data.trackedModel : null
+    } catch (e) {
+      ctx.host.log.warn("loadTrackedModel failed: " + String(e))
+      return null
+    }
+  }
+
+  function saveTrackedModel(ctx, label) {
+    var path = ctx.app.pluginDataDir + "/config.json"
+    try {
+      ctx.host.fs.writeText(path, JSON.stringify({ trackedModel: label }))
+    } catch (e) {
+      ctx.host.log.warn("saveTrackedModel failed: " + String(e))
+    }
+  }
+
+  function pickTrackedModel(models, savedLabel) {
+    // Keep saved model if it still has quota
+    if (savedLabel) {
+      for (var i = 0; i < models.length; i++) {
+        if (models[i].label === savedLabel && models[i].remainingFraction > 0) return savedLabel
+      }
+    }
+    // Auto-advance: pick model with highest remaining fraction
+    var bestLabel = models.length > 0 ? models[0].label : null
+    var bestFrac = -1
+    for (var i = 0; i < models.length; i++) {
+      if (models[i].remainingFraction > bestFrac) {
+        bestFrac = models[i].remainingFraction
+        bestLabel = models[i].label
+      }
+    }
+    return bestLabel
+  }
+
+  function buildTrackedLines(ctx, configs) {
+    var models = []
     for (var i = 0; i < configs.length; i++) {
       var c = configs[i]
       var label = (typeof c.label === "string") ? c.label.trim() : ""
       if (!label) continue
       var qi = c.quotaInfo
       var frac = (qi && typeof qi.remainingFraction === "number") ? qi.remainingFraction : 0
-      var rtime = (qi && qi.resetTime) || undefined
-      var pool = poolLabel(normalizeLabel(label))
-      if (!deduped[pool] || frac < deduped[pool].remainingFraction) {
-        deduped[pool] = {
-          label: pool,
-          remainingFraction: frac,
-          resetTime: rtime,
-        }
-      }
+      models.push({
+        label: label,
+        remainingFraction: frac,
+        resetTime: (qi && qi.resetTime) || undefined,
+        sortKey: modelSortKey(label),
+      })
     }
-
-    var models = []
-    var keys = Object.keys(deduped)
-    for (var i = 0; i < keys.length; i++) {
-      var m = deduped[keys[i]]
-      m.sortKey = modelSortKey(m.label)
-      models.push(m)
-    }
+    if (models.length === 0) return []
 
     models.sort(function (a, b) {
       return a.sortKey < b.sortKey ? -1 : a.sortKey > b.sortKey ? 1 : 0
     })
 
-    var lines = []
+    var savedLabel = loadTrackedModel(ctx)
+    var trackedLabel = pickTrackedModel(models, savedLabel)
+    if (trackedLabel !== savedLabel) saveTrackedModel(ctx, trackedLabel)
+
+    var trackedModel = models[0]
     for (var i = 0; i < models.length; i++) {
-      lines.push(modelLine(ctx, models[i].label, models[i].remainingFraction, models[i].resetTime))
+      if (models[i].label === trackedLabel) { trackedModel = models[i]; break }
+    }
+
+    var lines = [modelLine(ctx, "Tracked", trackedModel.remainingFraction, trackedModel.resetTime)]
+    for (var i = 0; i < models.length; i++) {
+      var m = models[i]
+      lines.push(modelLine(ctx, m.label, m.remainingFraction, m.resetTime,
+        m.label === trackedModel.label ? "tracked" : undefined))
     }
     return lines
   }
@@ -413,7 +532,12 @@
 
     if (!hasUserStatus) {
       ctx.host.log.warn("GetUserStatus failed, trying GetCommandModelConfigs")
-      data = callLs(ctx, found.port, found.scheme, discovery.csrf, "GetCommandModelConfigs", { metadata: metadata })
+      try {
+        data = callLs(ctx, found.port, found.scheme, discovery.csrf, "GetCommandModelConfigs", { metadata: metadata })
+      } catch (e) {
+        ctx.host.log.warn("GetCommandModelConfigs threw: " + String(e))
+        return null
+      }
     }
 
     // Parse model configs
@@ -433,7 +557,7 @@
       filtered.push(configs[j])
     }
 
-    var lines = buildModelLines(ctx, filtered)
+    var lines = buildTrackedLines(ctx, filtered)
     if (lines.length === 0) return null
 
     var plan = null
@@ -461,28 +585,30 @@
 
   function probe(ctx) {
     var dbTokens = loadOAuthTokens(ctx)
+    var geminiTokens = (!dbTokens) ? loadGeminiCliTokens(ctx) : null
+    var tokens = dbTokens || geminiTokens
 
     var lsResult = probeLs(ctx)
     if (lsResult) return lsResult
 
-    var tokens = []
-    if (dbTokens && dbTokens.accessToken) {
-      if (!dbTokens.expirySeconds || dbTokens.expirySeconds > Math.floor(Date.now() / 1000)) {
-        tokens.push(dbTokens.accessToken)
+    var accessTokens = []
+    if (tokens && tokens.accessToken) {
+      if (!tokens.expirySeconds || tokens.expirySeconds > Math.floor(Date.now() / 1000)) {
+        accessTokens.push(tokens.accessToken)
       }
     }
 
     var cached = loadCachedToken(ctx)
-    if (cached && tokens.indexOf(cached) === -1) tokens.push(cached)
+    if (cached && accessTokens.indexOf(cached) === -1) accessTokens.push(cached)
 
-    if (tokens.length === 0 && !(dbTokens && dbTokens.refreshToken)) {
+    if (accessTokens.length === 0 && !(tokens && tokens.refreshToken)) {
       throw "Start Antigravity and try again."
     }
 
     var ccData = null
     var sawAuthFailure = false
-    for (var i = 0; i < tokens.length; i++) {
-      var nextData = probeCloudCode(ctx, tokens[i])
+    for (var i = 0; i < accessTokens.length; i++) {
+      var nextData = probeCloudCode(ctx, accessTokens[i])
       if (nextData && !nextData._authFailed) {
         ccData = nextData
         break
@@ -490,24 +616,20 @@
       if (nextData && nextData._authFailed) sawAuthFailure = true
     }
 
-    // Only refresh on evidence of an auth failure, or when there were no tokens to try.
-    // probeCloudCode returns null for transient failures (5xx/timeouts); without this
-    // guard a Cloud Code incident would trigger a Google OAuth refresh every probe cycle
-    // instead of ~once per token lifetime — risking refresh-token throttling or rotation.
-    if (!ccData && dbTokens && dbTokens.refreshToken &&
-        (sawAuthFailure || tokens.length === 0)) {
-      var refreshed = refreshAccessToken(ctx, dbTokens.refreshToken)
+    if (!ccData && tokens && tokens.refreshToken &&
+        (sawAuthFailure || accessTokens.length === 0)) {
+      var refreshed = refreshAccessToken(ctx, tokens.refreshToken)
       if (refreshed) ccData = probeCloudCode(ctx, refreshed)
     }
 
     if (ccData && !ccData._authFailed) {
       var configs = parseCloudCodeModels(ccData)
-      var lines = buildModelLines(ctx, configs)
+      var lines = buildTrackedLines(ctx, configs)
       if (lines.length > 0) return { plan: null, lines: lines }
     }
 
     throw "Start Antigravity and try again."
   }
 
-  globalThis.__openusage_plugin = { id: "antigravity", probe: probe }
+  globalThis.__usageleft_plugin = { id: "antigravity", probe: probe }
 })()
