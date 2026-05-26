@@ -24,6 +24,14 @@
 - Web: improve mobile responsiveness with 480px and 640px breakpoints
 - Web: scroll to dashboard section on "Show Dashboard" click
 - Web: add animated CTA arrow on Show Dashboard dropdown item
+- Web: add copy buttons to install commands
+
+### Bug Fixes
+- Release CI: remove conflicting `libappindicator3-dev` package (conflicts with `libayatana-appindicator3-dev` on ubuntu-22.04)
+- Release CI: disable updater artifact signing — fixes "Missing comment in secret key" build failure
+- Release CI: verify step now only checks for `.deb`, not `latest.json`/`.sig`
+- Website: commit assets directly to `web/assets/` — eliminates recurring image 404s on every deploy
+- Website: fix install command URL to correct versioned `.deb` filename
 
 ---
 
